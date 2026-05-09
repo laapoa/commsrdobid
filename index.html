@@ -1195,7 +1195,25 @@
     .picker { padding: 16px; }
     .card { padding: 18px; }
     .field-grid { grid-template-columns: 1fr; }
-    .field-grid.four-col { grid-template-columns: 1fr 1fr; }
+    /* Mobile 4-col layout. We use 4 equal narrow tracks and assign explicit
+       column spans per field so the visual proportions can differ between
+       row 1 and row 2 (CSS Grid columns are uniform across rows, but spans
+       are per-item). Result:
+         Row 1:  Name  Name  Name  Watch         (Watch is 1/4 = half its
+                                                   prior 1/2 share; Name takes
+                                                   the freed space)
+         Row 2:  Serial  Cls   Cls   Cls         (Serial gets a small 1/4
+                                                   track sized to its 96-120px
+                                                   input; Classification takes
+                                                   the rest, beginning right
+                                                   at Serial's right edge)
+       The trailing .field.full uses its own grid-column: 1/-1 rule so the
+       Bid Period dropdown spans all 4 tracks. */
+    .field-grid.four-col { grid-template-columns: repeat(4, 1fr); }
+    .field-grid.four-col > .field:nth-child(1) { grid-column: span 3; } /* Name */
+    .field-grid.four-col > .field:nth-child(2) { grid-column: span 1; } /* Watch */
+    .field-grid.four-col > .field:nth-child(3) { grid-column: span 1; } /* Serial */
+    .field-grid.four-col > .field:nth-child(4) { grid-column: span 3; } /* Classification */
     .day { min-height: 52px; padding: 4px 5px; }
     .day .num { font-size: 16px; }
     .day .date { font-size: 10px; }
