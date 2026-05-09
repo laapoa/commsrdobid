@@ -1293,10 +1293,13 @@
              user types one letter (A–F, auto-uppercased) followed by 4 digits.
              autocapitalize="characters" tells iOS to default to caps. JS in
              the script section enforces position-by-position validation
-             (slot 0 must be A–F, slots 1–4 must be 0–9). -->
+             (slot 0 must be A–F, slots 1–4 must be 0–9).
+             Default value "B" prefills the most common starting letter for
+             dispatch serials so users only have to enter the 4 digits. -->
         <input type="text"
                id="w-serial"
-               placeholder="A1234"
+               value="B"
+               placeholder="B1234"
                maxlength="5"
                autocapitalize="characters"
                autocomplete="off"
@@ -2497,6 +2500,9 @@ function forgetOfficer() {
       if (empty) el.value = '';
       else if (id === 'w-rank') el.value = 'Comm Info Rep';
       else el.value = el.options[0].value;
+    } else if (id === 'w-serial') {
+      // Match the page-load default: "B" is the common starting letter.
+      el.value = 'B';
     } else {
       el.value = '';
     }
