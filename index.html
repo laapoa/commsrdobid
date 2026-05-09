@@ -173,7 +173,12 @@
   .field-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 16px 20px;
+    /* Uniform 20px spacing in both directions — matches the horizontal gap
+       between adjacent fields in a row (e.g. Name↔Watch). Previously the row
+       gap was 16px and column gap 20px, which made vertical spacing between
+       rows feel tighter than horizontal spacing within a row. Applies on
+       desktop and mobile. */
+    gap: 20px;
     margin-bottom: 24px;
   }
   .field-grid.four-col {
@@ -203,6 +208,16 @@
     color: var(--ink-soft);
     margin-bottom: 6px;
   }
+  /* Field labels in the 4-col header row must stay single-line. The Serial №
+     cell is naturally narrow (~60-80px depending on viewport) and "SERIAL №"
+     with letter-spacing only just fits. Without nowrap, on viewports around
+     360px the label wraps to two lines, making that cell taller than its
+     row neighbors and throwing the row out of alignment. Scope is restricted
+     to the four-col grid so longer section headings ("Requested Watch
+     Assignment...", "Comments / Special Considerations...") can still wrap. */
+  .field-grid.four-col > .field > label {
+    white-space: nowrap;
+  }
   input[type="text"], input[type="number"], select {
     border: 1px solid var(--line);
     background: var(--paper);
@@ -223,14 +238,13 @@
     border-color: var(--navy);
     background: white;
   }
-  /* Serial input: 5-char value (A1234) doesn't need a full-width input.
-     Cap at ~1/3 of its grid track width so it sits as a compact pill at
-     the left of its column, with a sensible minimum so the placeholder
-     stays readable on every viewport. */
+  /* Serial input fills its grid cell exactly. The cell is naturally narrow
+     (~80px on both desktop and mobile via the column structure), which is
+     still plenty for "A1234". Filling the cell — instead of pinning to a
+     fixed 96–120px range — guarantees the visual gap to Classification is
+     exactly the 20px column gap, not a value reduced by input overflow. */
   #w-serial {
-    width: 33%;
-    min-width: 96px;
-    max-width: 120px;
+    width: 100%;
   }
 
   /* ===== BID MODE TOGGLE ===== */
@@ -3358,6 +3372,14 @@ function fmtMDDYYYY(d) {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
 </script>
+
+<!-- Cloudflare Web Analytics — shared with the LAAPOA officer bid tool. Both
+     tools live under laapoa.github.io so they send beacons with the same
+     hostname; the same token routes both into one dashboard. To view
+     dispatch-only stats, in the CF dashboard apply a path filter:
+     Path contains /commsrdobid -->
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "0b605e2cf34346319d14340816700da0"}'></script>
+<!-- End Cloudflare Web Analytics -->
 
 </body>
 </html>
