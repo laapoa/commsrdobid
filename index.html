@@ -183,15 +183,16 @@
   }
   .field-grid.four-col {
     /* Columns: Name | Watch | Serial | Classification.
-       Name and Classification are the two long-content fields, sized
-       at 1.9fr / 2fr so the row reads as a balanced left/right pairing.
-       Watch is bumped to 0.6fr (~2 character widths wider than the natural
-       0.5fr) so the dropdown has breathing room around the chosen value;
-       the corresponding 0.1fr is taken off Name. Serial stays at 0.5fr —
-       its content (A1234) only needs a small input. Total = 5fr; the
-       row's right edge then justifies cleanly against the full-width Bid
-       Period dropdown below. */
-    grid-template-columns: 1.9fr 0.6fr 0.5fr 2fr;
+       Name 1.9fr and Watch 0.6fr: Watch is ~2 character widths wider than the
+       baseline 0.5fr so the dropdown has breathing room around "Watch 1/2/3";
+       the corresponding 0.1fr is taken off Name.
+       Serial 1fr and Classification 1.5fr: with the short classification
+       names ("Comm Information Rep" etc.) Classification no longer needs
+       2fr to fit its longest option. The freed 0.5fr is divvied — half
+       stays with Classification (now 1.5fr), half goes to Serial (now 1fr).
+       Total = 5fr; the row's right edge then justifies cleanly against the
+       full-width Bid Period dropdown below. */
+    grid-template-columns: 1.9fr 0.6fr 1fr 1.5fr;
   }
   .field {
     display: flex;
@@ -1215,23 +1216,31 @@
     /* Mobile 4-col layout. We use 4 narrow tracks and assign explicit
        column spans per field so the visual proportions can differ between
        row 1 and row 2 (CSS Grid columns are uniform across rows, but spans
-       are per-item). Track 4 is 1.3fr (the others 1fr) so the Watch cell —
-       which sits alone in track 4 — is ~2 character widths wider than a
-       perfectly equal 1fr would make it. Result:
-         Row 1:  Name  Name  Name  Watch         (Watch widened ~17px;
+       are per-item). Track 4 is 1.8fr (the others 1fr) so the Watch cell —
+       which sits alone in track 4 — is ~3 character widths wider than
+       a 1fr track would make it; this gives the dropdown room to display
+       "Watch 1/2/3" without the chosen value getting clipped by the
+       dropdown chevron. Result:
+         Row 1:  Name  Name  Name  Watch         (Watch widened ~24px;
                                                    Name's 3-track span loses
                                                    the same total width)
-         Row 2:  Serial  Cls   Cls   Cls         (Serial gets a small 1-track
-                                                   slot sized to its A1234
-                                                   input; Classification spans
-                                                   the wider rest of the row)
+         Row 2:  Serial  Serial  Cls   Cls       (Serial and Classification
+                                                   each span 2 tracks now,
+                                                   divvying row 2 between
+                                                   them — Serial gets a
+                                                   2-track slot it can fill
+                                                   comfortably, Classification
+                                                   shrinks to fit the now-
+                                                   shorter classification
+                                                   names like "Comm
+                                                   Information Rep")
        The trailing .field.full uses its own grid-column: 1/-1 rule so the
        Bid Period dropdown spans all 4 tracks. */
-    .field-grid.four-col { grid-template-columns: 1fr 1fr 1fr 1.3fr; }
+    .field-grid.four-col { grid-template-columns: 1fr 1fr 1fr 1.8fr; }
     .field-grid.four-col > .field:nth-child(1) { grid-column: span 3; } /* Name */
     .field-grid.four-col > .field:nth-child(2) { grid-column: span 1; } /* Watch */
-    .field-grid.four-col > .field:nth-child(3) { grid-column: span 1; } /* Serial */
-    .field-grid.four-col > .field:nth-child(4) { grid-column: span 3; } /* Classification */
+    .field-grid.four-col > .field:nth-child(3) { grid-column: span 2; } /* Serial */
+    .field-grid.four-col > .field:nth-child(4) { grid-column: span 2; } /* Classification */
     .day { min-height: 52px; padding: 4px 5px; }
     .day .num { font-size: 16px; }
     .day .date { font-size: 10px; }
@@ -1297,9 +1306,9 @@
       <div class="field">
         <label for="w-rank">Classification</label>
         <select id="w-rank">
-          <option value="Communications Information Representative">Communications Information Representative</option>
-          <option value="Senior Communications Operator">Senior Communications Operator</option>
-          <option value="Principal Communications Operator">Principal Communications Operator</option>
+          <option value="Comm Information Rep">Comm Information Rep</option>
+          <option value="Sr. Comm Op">Sr. Comm Op</option>
+          <option value="Principal Comm Op">Principal Comm Op</option>
         </select>
       </div>
       <div class="field full">
@@ -2443,13 +2452,9 @@ function syncRDODisplay() {
   const nameEl = document.getElementById('r-name-display');
   const serialEl = document.getElementById('r-serial-display');
   const watchEl = document.getElementById('r-watch-display');
-  // Compact label for display — full classification names are long enough to
-  // wrap awkwardly in the read-only chip. Use short forms here only.
-  const rankShort =
-    rank === 'Principal Communications Operator' ? 'Pr. Comm Op' :
-    rank === 'Senior Communications Operator'    ? 'Sr. Comm Op' :
-    rank === 'Communications Information Representative' ? 'CIR' :
-                                                   rank || '—';
+  // The classification names are already short enough for the read-only
+  // display chip; just show the value as-is, falling back to em-dash if unset.
+  const rankShort = rank || '—';
   if (rankEl)   rankEl.textContent = rankShort;
   if (nameEl)   nameEl.textContent = name || '—';
   if (serialEl) serialEl.textContent = serial ? `#${serial}` : '—';
@@ -2490,7 +2495,7 @@ function forgetOfficer() {
     if (el.tagName === 'SELECT') {
       const empty = Array.from(el.options).find(o => o.value === '');
       if (empty) el.value = '';
-      else if (id === 'w-rank') el.value = 'Communications Information Representative';
+      else if (id === 'w-rank') el.value = 'Comm Information Rep';
       else el.value = el.options[0].value;
     } else {
       el.value = '';
@@ -2545,13 +2550,13 @@ function generateCombinedPDF() {
   const name = document.getElementById('w-name').value.trim();
   const serial = document.getElementById('w-serial').value.trim().toUpperCase();
   const curWatch = document.getElementById('w-curwatch').value || '';
-  const rank = document.getElementById('w-rank').value || 'Communications Information Representative';
+  const rank = document.getElementById('w-rank').value || 'Comm Information Rep';
   // Short label used in filenames and the "Last name, ABBR" prefix on slips.
   // Each dispatch classification gets a compact 2-3 letter abbreviation.
   const rankAbbr =
-    rank === 'Principal Communications Operator' ? 'Pr. CO' :
-    rank === 'Senior Communications Operator'    ? 'Sr. CO' :
-                                                   'CIR';
+    rank === 'Principal Comm Op' ? 'Pr. CO' :
+    rank === 'Sr. Comm Op'       ? 'Sr. CO' :
+                                   'CIR';
   const nameWithRank = `${rankAbbr} ${name}`;
 
   if (!name) return toast('Dispatcher name required', true);
@@ -2950,9 +2955,9 @@ function generateCombinedPDF() {
   const lastName = (name || '').split(',')[0].trim() || 'unsigned';
   // Filename-safe abbreviation per dispatch classification.
   const rankShort =
-    rank === 'Principal Communications Operator' ? 'Pr CO' :
-    rank === 'Senior Communications Operator'    ? 'Sr CO' :
-                                                   'CIR';
+    rank === 'Principal Comm Op' ? 'Pr CO' :
+    rank === 'Sr. Comm Op'       ? 'Sr CO' :
+                                   'CIR';
   const namePart = `${serial || 'X0000'}, ${rankShort} ${lastName}`;
 
   // Format a list of {dp, year} with year stated only after the LAST DP of each
