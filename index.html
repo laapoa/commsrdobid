@@ -207,33 +207,111 @@
     background: white;
   }
 
-  /* ===== SERIAL KEYPAD (mobile only) =====
+  /* ===== SERIAL KEYPAD (mobile only, on-focus bottom sheet) =====
      Custom on-screen keypad for entering the dispatcher serial in the strict
-     1 letter (A-F) + 4 digits format. Shown only on touch / small-viewport
-     devices; desktop users get the regular text input and physical keyboard.
+     1 letter (A-F) + 4 digits format. Behaves like the OS keyboard:
 
-     Behavior:
+       • Hidden by default, slides up from the bottom edge of the viewport when
+         the serial input gets focus. Slides back down on blur.
+       • Shown only on coarse-pointer / narrow-viewport contexts. Desktop users
+         get the regular text input and physical keyboard.
+       • Header bar shows a live preview of what's been entered so the user can
+         see their progress even if the keypad is covering the form input.
+       • Done button (top-right of the header) dismisses the keypad explicitly.
+
+     Behavior of the keys themselves (managed in JS):
        1. Initially: letter row (A-F) is active; number row is disabled+grayed.
        2. User taps a letter → it locks in as the first character, the letter
           row dims, and the number row becomes active.
        3. User taps 4 digits → each appends to the serial; once 5 chars total
           (letter + 4 digits), all keys disable.
-       4. ⌫ (backspace) removes the last character, re-enabling whichever row
-          is appropriate.
-       5. CLR wipes the field and returns to step 1. */
+       4. ⌫ removes the last character; Clear wipes the field. */
   .serial-keypad {
-    display: none; /* shown via media query below */
-    margin-top: 8px;
-    padding: 10px;
-    background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    /* Always rendered in the DOM, but display: none on desktop so it never
+       interferes there. On mobile it's display: block but transformed offscreen
+       until the .open class is applied. */
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 500;
+    background: white;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(10, 31, 61, 0.18);
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform 0.22s cubic-bezier(.4, 0, .2, 1);
     user-select: none;
   }
+  .serial-keypad.open {
+    transform: translateY(0);
+  }
+
+  /* Header bar: prompt label + live value preview on the left, Done button on
+     the right. Sits above the key rows and stays visible even as the user
+     scrolls the form behind. */
+  .serial-keypad-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 6px 8px;
+    border-bottom: 1px solid var(--paper-dark);
+    margin-bottom: 8px;
+  }
+  .skp-prompt {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex: 1;
+    min-width: 0; /* allow value text to ellipsis if it overflows */
+  }
+  .skp-prompt-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+    flex-shrink: 0;
+  }
+  .skp-prompt-value {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    color: var(--navy);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .skp-prompt-value.placeholder {
+    color: var(--line);
+    font-weight: 500;
+  }
+  .skp-done-btn {
+    background: var(--navy);
+    color: var(--gold-bright);
+    border: 0;
+    padding: 8px 18px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    flex-shrink: 0;
+  }
+  .skp-done-btn:active { background: var(--navy-deep); }
+
   .serial-keypad-row {
     display: grid;
-    gap: 6px;
-    margin-bottom: 6px;
+    gap: 5px;
+    margin-bottom: 5px;
   }
   .serial-keypad-row:last-child { margin-bottom: 0; }
   .serial-keypad-row.letters { grid-template-columns: repeat(6, 1fr); }
@@ -245,8 +323,8 @@
     color: var(--ink);
     font-family: 'Oswald', sans-serif;
     font-weight: 700;
-    font-size: 18px;
-    padding: 14px 0;
+    font-size: 17px;
+    padding: 11px 0;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.1s ease;
@@ -268,21 +346,20 @@
   .skp-key.letter.active-row { border-color: var(--gold); }
   .skp-key.digit.active-row { border-color: var(--gold); }
   .skp-key.action {
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.05em;
     color: var(--ink-soft);
   }
   .skp-key.action.bksp { color: var(--vac); }
-  .skp-key.action.clr { color: var(--ink-soft); }
 
-  /* Show keypad on coarse-pointer devices OR narrow viewports.
-     Hide the desktop input's spinner/native UI quirks via inputmode=text. */
+  /* Show keypad block-level on coarse-pointer / narrow viewport. The .open
+     class still controls slide-in/out; without .open it stays translated
+     offscreen via the transform set above. */
   @media (pointer: coarse), (max-width: 720px) {
     .serial-keypad { display: block; }
-    /* Make the input read-only-feeling on mobile so tapping it doesn't pop the
-       OS keyboard. The actual readonly attribute is set in JS so desktop with a
-       coarse pointer (e.g. touchscreen laptop) still allows typing if the user
-       uses a physical keyboard. */
+    /* Suppress the OS keyboard while focused — the keypad is the sole input.
+       caret-color: transparent hides the blinking I-beam since taps don't
+       move it anyway. */
     #w-serial.kp-managed { caret-color: transparent; }
   }
 
@@ -1300,10 +1377,19 @@
       <div class="field">
         <label for="w-serial">Serial Number</label>
         <input type="text" id="w-serial" placeholder="e.g. A1234" inputmode="text" autocapitalize="characters">
-        <!-- Mobile keypad. Letter row is enforced first; numbers light up only
-             after a letter is committed, per dispatch's 1-letter + 4-digit serial
-             format. Desktop users see this hidden via CSS media query. -->
+        <!-- Mobile keypad. Slides up as a bottom sheet only when the serial
+             input is focused. Letter row is enforced first; numbers light up
+             only after a letter is committed, per dispatch's 1-letter +
+             4-digit serial format. Desktop users see this hidden via CSS
+             media query. -->
         <div class="serial-keypad" id="w-serial-keypad" aria-hidden="true">
+          <div class="serial-keypad-head">
+            <div class="skp-prompt">
+              <span class="skp-prompt-label">Serial</span>
+              <span class="skp-prompt-value placeholder" id="skp-value-display">A1234</span>
+            </div>
+            <button type="button" class="skp-done-btn" data-act="done">Done</button>
+          </div>
           <div class="serial-keypad-row letters">
             <button type="button" class="skp-key letter" data-c="A">A</button>
             <button type="button" class="skp-key letter" data-c="B">B</button>
@@ -1828,10 +1914,11 @@ setupSerialField(document.getElementById('w-serial'));
 
 /* ============================================================
    MOBILE SERIAL KEYPAD
-   Manages the on-screen keypad below the serial input. Disables the OS
-   keyboard on mobile (via readOnly) so taps go through the keypad rather than
-   the native input field. The desktop case (no coarse pointer, wide viewport)
-   leaves the input fully editable.
+   Manages the on-screen keypad that slides up as a bottom sheet whenever the
+   serial input is focused on mobile. Disables the OS keyboard via readOnly so
+   taps go through the keypad rather than the native input. The desktop case
+   (no coarse pointer, wide viewport) leaves the input fully editable and never
+   shows the keypad at all.
    ============================================================ */
 function isMobileSerialContext() {
   return window.matchMedia('(pointer: coarse), (max-width: 720px)').matches;
@@ -1839,6 +1926,31 @@ function isMobileSerialContext() {
 
 const serialInputEl = document.getElementById('w-serial');
 const serialKeypadEl = document.getElementById('w-serial-keypad');
+const serialValueDisplayEl = document.getElementById('skp-value-display');
+
+// Slide-in/slide-out timer. The bottom sheet uses a small grace period on
+// blur so a tap on a keypad button (which fires blur in some browsers despite
+// our pointerdown.preventDefault) doesn't briefly trigger close-then-reopen.
+let keypadHideTimer = null;
+const KEYPAD_HIDE_DELAY_MS = 100;
+
+function openKeypad() {
+  if (!isMobileSerialContext()) return;
+  if (keypadHideTimer) { clearTimeout(keypadHideTimer); keypadHideTimer = null; }
+  serialKeypadEl.classList.add('open');
+  serialKeypadEl.setAttribute('aria-hidden', 'false');
+}
+
+function closeKeypad(immediate) {
+  if (keypadHideTimer) { clearTimeout(keypadHideTimer); keypadHideTimer = null; }
+  const doClose = () => {
+    serialKeypadEl.classList.remove('open');
+    serialKeypadEl.setAttribute('aria-hidden', 'true');
+    keypadHideTimer = null;
+  };
+  if (immediate) doClose();
+  else keypadHideTimer = setTimeout(doClose, KEYPAD_HIDE_DELAY_MS);
+}
 
 function refreshSerialKeypad() {
   // Sync per-row enabled state to the current input value length and content.
@@ -1858,10 +1970,21 @@ function refreshSerialKeypad() {
     btn.disabled = disabled;
     btn.classList.toggle('active-row', !disabled);
   });
-  // Action keys: backspace enabled if any chars; clear enabled if any chars.
+  // Action keys: backspace + clear enabled only if there's something to act on.
   serialKeypadEl.querySelectorAll('.skp-key.action').forEach(btn => {
     btn.disabled = v.length === 0;
   });
+
+  // Live value preview in the keypad header.
+  if (serialValueDisplayEl) {
+    if (v === '') {
+      serialValueDisplayEl.textContent = 'A1234';
+      serialValueDisplayEl.classList.add('placeholder');
+    } else {
+      serialValueDisplayEl.textContent = v;
+      serialValueDisplayEl.classList.remove('placeholder');
+    }
+  }
 }
 
 function appendSerialChar(c) {
@@ -1888,14 +2011,42 @@ function clearSerial() {
   serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// Wire keypad buttons.
-serialKeypadEl.querySelectorAll('.skp-key').forEach(btn => {
+// Focus / blur drive the slide-in/slide-out. Note that on mobile the input is
+// readOnly so the OS keyboard doesn't appear — but it still receives focus.
+serialInputEl.addEventListener('focus', openKeypad);
+serialInputEl.addEventListener('blur', () => closeKeypad(false));
+
+// Prevent keypad button taps from blurring the input. Without this, on some
+// browsers a tap on a key would steal focus, hiding the keypad mid-tap.
+// pointerdown covers both mouse and touch; we preventDefault before the tap
+// reaches the focus-stealing native behavior.
+serialKeypadEl.addEventListener('pointerdown', e => {
+  if (e.target.closest('.skp-key, .skp-done-btn')) {
+    e.preventDefault();
+    if (keypadHideTimer) { clearTimeout(keypadHideTimer); keypadHideTimer = null; }
+  }
+});
+// Fallback for browsers that don't honor pointerdown.preventDefault for focus.
+serialKeypadEl.addEventListener('mousedown', e => {
+  if (e.target.closest('.skp-key, .skp-done-btn')) e.preventDefault();
+});
+
+// Wire keypad buttons. Done blurs the input which triggers the slide-down.
+serialKeypadEl.querySelectorAll('.skp-key, .skp-done-btn').forEach(btn => {
   btn.addEventListener('click', e => {
     e.preventDefault();
     if (btn.disabled) return;
-    if (btn.dataset.act === 'bksp') backspaceSerial();
-    else if (btn.dataset.act === 'clr') clearSerial();
-    else if (btn.dataset.c) appendSerialChar(btn.dataset.c);
+    if (btn.dataset.act === 'done') {
+      // Explicit dismiss — close immediately so there's no slide-up flicker.
+      closeKeypad(true);
+      serialInputEl.blur();
+    } else if (btn.dataset.act === 'bksp') {
+      backspaceSerial();
+    } else if (btn.dataset.act === 'clr') {
+      clearSerial();
+    } else if (btn.dataset.c) {
+      appendSerialChar(btn.dataset.c);
+    }
   });
 });
 
@@ -1911,6 +2062,8 @@ function applySerialMobileLockout() {
     serialInputEl.readOnly = false;
     serialInputEl.classList.remove('kp-managed');
     serialInputEl.setAttribute('inputmode', 'text');
+    // If the viewport became wide while the keypad was open, hide it.
+    closeKeypad(true);
   }
 }
 applySerialMobileLockout();
