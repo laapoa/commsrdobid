@@ -1,0 +1,3521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APD Dispatch Watch &amp; RDO Bid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --navy: #0a1f3d;
+    --navy-deep: #061429;
+    --navy-light: #15355e;
+    --gold: #c9a961;
+    --gold-bright: #e6c478;
+    --paper: #f5f2eb;
+    --paper-dark: #e8e3d6;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --line: #c9c2b0;
+    --rdo: #1a4d7a;
+    --rdo-light: #2e6ba1;
+    --vac: #8b3a1f;
+    --vac-light: #b04d2a;
+    --weekend: #ebe5d2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  body {
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 38px,
+        rgba(10, 31, 61, 0.04) 38px,
+        rgba(10, 31, 61, 0.04) 39px
+      );
+  }
+
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+
+  /* ===== HEADER ===== */
+  header {
+    background: var(--navy);
+    color: var(--paper);
+    padding: 24px 32px;
+    border-bottom: 4px solid var(--gold);
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 200px;
+    background: linear-gradient(135deg, transparent 0%, rgba(201, 169, 97, 0.08) 100%);
+    pointer-events: none;
+  }
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .shield {
+    /* Dispatcher badge — embedded as a transparent PNG so it sits cleanly on
+       the navy header without a visible square background. The image's natural
+       aspect is 1:1; we display it at 60px tall to roughly match the original
+       shield's vertical footprint. width:auto keeps the aspect intact. */
+    height: 64px;
+    width: auto;
+    flex-shrink: 0;
+    /* Subtle drop shadow to give the gold lines a touch of depth on the navy. */
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  }
+  .title-block h1 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .title-block .subtitle {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+    margin-top: 6px;
+    font-weight: 500;
+  }
+
+  /* ===== MASTER PICKER ===== */
+  .picker {
+    background: white;
+    border: 1px solid var(--line);
+    border-top: none;
+    padding: 24px 32px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .picker-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-right: 8px;
+  }
+  .mode-btn {
+    background: var(--paper);
+    border: 2px solid var(--line);
+    padding: 12px 28px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .mode-btn:hover {
+    border-color: var(--navy);
+    color: var(--navy);
+  }
+  .mode-btn.active {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: var(--paper);
+  }
+  .mode-btn.active::before {
+    content: '▸ ';
+    color: var(--gold-bright);
+  }
+
+  /* ===== FORM CARD ===== */
+  .card {
+    background: white;
+    border: 1px solid var(--line);
+    border-top: none;
+    padding: 32px;
+  }
+  .card-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--navy);
+    border-bottom: 2px solid var(--gold);
+    padding-bottom: 8px;
+    margin-bottom: 24px;
+    display: inline-block;
+  }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .field-grid.four-col {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+  }
+  .field.full { grid-column: 1 / -1; }
+  label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  input[type="text"], input[type="number"], select {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    padding: 10px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    outline: none;
+    border-color: var(--navy);
+    background: white;
+  }
+
+  /* ===== SERIAL KEYPAD (mobile only) =====
+     Custom on-screen keypad for entering the dispatcher serial in the strict
+     1 letter (A-F) + 4 digits format. Shown only on touch / small-viewport
+     devices; desktop users get the regular text input and physical keyboard.
+
+     Behavior:
+       1. Initially: letter row (A-F) is active; number row is disabled+grayed.
+       2. User taps a letter → it locks in as the first character, the letter
+          row dims, and the number row becomes active.
+       3. User taps 4 digits → each appends to the serial; once 5 chars total
+          (letter + 4 digits), all keys disable.
+       4. ⌫ (backspace) removes the last character, re-enabling whichever row
+          is appropriate.
+       5. CLR wipes the field and returns to step 1. */
+  .serial-keypad {
+    display: none; /* shown via media query below */
+    margin-top: 8px;
+    padding: 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    user-select: none;
+  }
+  .serial-keypad-row {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .serial-keypad-row:last-child { margin-bottom: 0; }
+  .serial-keypad-row.letters { grid-template-columns: repeat(6, 1fr); }
+  .serial-keypad-row.digits { grid-template-columns: repeat(3, 1fr); }
+  .serial-keypad-row.actions { grid-template-columns: repeat(3, 1fr); }
+  .skp-key {
+    background: white;
+    border: 1.5px solid var(--line);
+    color: var(--ink);
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    padding: 14px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .skp-key:active:not(:disabled) {
+    background: var(--navy);
+    color: var(--gold-bright);
+    transform: scale(0.96);
+  }
+  .skp-key:disabled {
+    background: var(--paper-dark);
+    color: var(--line);
+    border-color: var(--paper-dark);
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .skp-key.letter.active-row { border-color: var(--gold); }
+  .skp-key.digit.active-row { border-color: var(--gold); }
+  .skp-key.action {
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+  }
+  .skp-key.action.bksp { color: var(--vac); }
+  .skp-key.action.clr { color: var(--ink-soft); }
+
+  /* Show keypad on coarse-pointer devices OR narrow viewports.
+     Hide the desktop input's spinner/native UI quirks via inputmode=text. */
+  @media (pointer: coarse), (max-width: 720px) {
+    .serial-keypad { display: block; }
+    /* Make the input read-only-feeling on mobile so tapping it doesn't pop the
+       OS keyboard. The actual readonly attribute is set in JS so desktop with a
+       coarse pointer (e.g. touchscreen laptop) still allows typing if the user
+       uses a physical keyboard. */
+    #w-serial.kp-managed { caret-color: transparent; }
+  }
+
+  /* ===== END SERIAL KEYPAD ===== */
+
+  /* ===== BID MODE TOGGLE ===== */
+  .bid-mode-toggle {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin: 4px 0 12px;
+  }
+  .bid-mode-toggle .bm-opt {
+    background: transparent;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .bid-mode-toggle .bm-opt.active {
+    background: var(--ink-deep);
+    color: var(--gold-bright);
+  }
+  .bid-mode-toggle .bm-opt:not(.active):hover {
+    color: var(--ink-deep);
+  }
+
+  /* ===== FULL-YEAR WATCH GROUP CARDS ===== */
+  .fy-watch-groups {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .fy-watch-group {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 16px 16px;
+    background: var(--paper);
+  }
+  .fy-watch-group .fy-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .fy-watch-group .fy-head .fy-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink-deep);
+  }
+  .fy-watch-group .fy-head .fy-range {
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .fy-watch-group .watch-options {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .fy-watch-group .watch-opt {
+    padding: 12px 8px 0;
+    min-height: 78px;
+  }
+  .fy-watch-group .watch-opt .w-num { font-size: 32px; }
+  .fy-watch-group .watch-opt .w-label { font-size: 11px; }
+  .fy-watch-group .watch-opt .w-status { font-size: 10px; padding: 4px 0; }
+
+  /* ===== WATCH PICKER ===== */
+  .watch-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .watch-opt {
+    background: var(--paper);
+    border: 2px solid var(--line);
+    padding: 18px 12px 0;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    overflow: hidden;
+    position: relative;
+  }
+  .watch-opt:hover {
+    border-color: var(--navy);
+    transform: translateY(-1px);
+  }
+  .watch-opt .w-num {
+    font-family: 'Oswald', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1;
+    letter-spacing: 0.04em;
+  }
+  .watch-opt .w-label {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    margin-bottom: 14px;
+  }
+  .watch-opt .w-status {
+    background: var(--paper-dark);
+    color: var(--ink-soft);
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 8px 4px;
+    margin: 0 -12px;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+
+  /* 1ST CHOICE state */
+  .watch-opt.c-1 {
+    background: var(--navy);
+    border-color: var(--gold);
+  }
+  .watch-opt.c-1 .w-num { color: var(--gold-bright); }
+  .watch-opt.c-1 .w-label { color: white; }
+  .watch-opt.c-1 .w-status {
+    background: var(--gold);
+    color: var(--navy);
+    font-weight: 700;
+  }
+
+  /* 2ND CHOICE state */
+  .watch-opt.c-2 {
+    background: var(--paper-dark);
+    border-color: var(--navy);
+  }
+  .watch-opt.c-2 .w-num { color: var(--navy); }
+  .watch-opt.c-2 .w-label { color: var(--ink-soft); }
+  .watch-opt.c-2 .w-status {
+    background: var(--navy);
+    color: var(--gold-bright);
+    font-weight: 700;
+  }
+
+  .dp-range {
+    background: var(--paper);
+    border-left: 3px solid var(--gold);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .dp-range strong {
+    font-family: 'Oswald', sans-serif;
+    color: var(--navy);
+    letter-spacing: 0.04em;
+  }
+  .dp-range-list {
+    margin-top: 6px;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  /* ===== RDO SLOT PANELS (stacked, one per DP) ===== */
+  .rdo-slot {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+  .rdo-slot-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--navy);
+    color: var(--paper);
+    flex-wrap: wrap;
+  }
+  .rdo-slot-head .slot-label {
+    font-family: 'Oswald', sans-serif;
+    line-height: 1;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--navy);
+    background: var(--gold-bright);
+    padding: 6px 14px;
+    border-radius: 4px;
+    margin-right: 4px;
+    min-width: 78px;
+    text-align: center;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .rdo-slot-head .slot-label .slot-dp-num {
+    font-size: 22px;
+    /* Defines the horizontal space the YYYY line needs to fill. */
+  }
+  .rdo-slot-head .slot-label .slot-dp-year {
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0.85;
+    /* Distribute the 4 year digits across the full badge width using
+       text-align: justify with each character treated as a word via
+       wbr-like spacing. The JS sets the appropriate letter-spacing. */
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 1px;
+    box-sizing: border-box;
+  }
+  .rdo-slot-head .slot-label .slot-dp-year span {
+    flex: 0 0 auto;
+  }
+  .rdo-slot-head .slot-dp {
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+    color: var(--paper);
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+  }
+  .rdo-slot-head .stat-view-toggle {
+    /* Sits between the DP badge and the MOU chip / Apply button in the header.
+       Pin the toggle to the left side after the badge; the MOU chip uses
+       margin-left: auto to claim the rest of the space. */
+    margin-left: 4px;
+  }
+  .rdo-slot-head .header-mou-chip {
+    /* Pushed toward the right side; sits 15px left of the Apply button (or
+       against the right edge if Apply is omitted on the last slot). */
+    margin-left: auto;
+    margin-right: 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--paper);
+    font-family: 'Oswald', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    user-select: none;
+  }
+  .rdo-slot-head .header-mou-chip .swatch.holiday {
+    flex: 0 0 auto;
+  }
+  .rdo-slot-head .header-mou-chip .mou-text {
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .rdo-slot-head .apply-all-btn {
+    background: transparent;
+    color: var(--gold-bright);
+    border: 1px solid var(--gold-bright);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .rdo-slot-head .apply-all-btn:hover:not(:disabled) {
+    background: var(--gold-bright);
+    color: var(--navy);
+  }
+  .rdo-slot-head .apply-all-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.5);
+  }
+  /* On the last DP, render a non-interactive spacer with identical metrics to
+     the Apply button so the MOU chip's horizontal position remains anchored to
+     the same column as on the preceding DPs. */
+  .rdo-slot-head .apply-all-spacer {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .rdo-slot-body {
+    padding: 16px;
+  }
+  .rdo-controls {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .rdo-controls .field { flex: 0 0 auto; }
+  .rdo-controls .field input,
+  .rdo-controls .field select { min-width: 120px; }
+
+  /* Read-only display row of dispatcher info on the RDO page. Values mirror
+     the fields on the Watch BID page; editing happens there. */
+  .rdo-officer-display {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    background: var(--paper-dark);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    flex-wrap: wrap;
+  }
+  .rdo-officer-display .rdo-officer-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .rdo-officer-display .rdo-officer-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+  }
+  .rdo-officer-display .rdo-officer-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-deep);
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 0.02em;
+  }
+  .rdo-officer-display .rdo-officer-edit-hint {
+    margin-left: auto;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  /* Single RDO stat toggle — clicking cycles 1st → 2nd → both. The view-* classes
+     change the accent color so the user can see at a glance which view is active. */
+  /* RDO view toggle — two sections side by side:
+       LEFT: current view label (top line) + RDO count(s) below
+       RIGHT: "click for ..." hint indicating the next view
+     The view-* classes color the LEFT border per active view. */
+  .stat-view-toggle {
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 12px;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    transition: all 0.12s;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    line-height: 1.25;
+  }
+  .stat-view-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .stat-view-toggle.view-1 { border-color: var(--rdo-light); }
+  .stat-view-toggle.view-2 { border-color: #e88a4d; }
+  .stat-view-toggle.view-both { border-color: var(--gold-bright); }
+
+  .stat-view-toggle .toggle-current {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+  .stat-view-toggle .toggle-label {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gold-bright);
+    flex: 0 0 auto;
+  }
+  .stat-view-toggle .toggle-count {
+    font-size: 11px;
+    color: var(--paper);
+    font-weight: 500;
+    line-height: 1.35;
+    flex: 1 1 auto;
+  }
+  .stat-view-toggle .toggle-hint {
+    position: relative;
+    padding-left: 14px;
+    padding-right: 16px; /* room for the › chevron */
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .stat-view-toggle .toggle-hint::after {
+    content: '›';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-55%);
+    font-size: 22px;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  /* Reusable 2-line "Choice" block — appears wherever "1st Choice" / "2nd Choice" /
+     "1st & 2nd Choice" is shown. Renders inline-block so it can sit alongside
+     surrounding inline text and still occupy 2 centered lines. */
+  .choice-block {
+    display: inline-block;
+    text-align: center;
+    vertical-align: middle;
+    line-height: 1.1;
+  }
+
+  .rdo-info {
+    background: var(--navy);
+    color: var(--paper);
+    padding: 14px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rdo-info .info-block {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .rdo-info .stat {
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .rdo-info .stat .num {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--gold-bright);
+    margin-right: 4px;
+  }
+  .rdo-info .stat .stat-label-prefix {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+  .rdo-info .stat .stat-label-prefix.first { background: var(--rdo-light); }
+  .rdo-info .stat .stat-label-prefix.second { background: #e88a4d; }
+  .rdo-info .stat.warn .num { color: #ff8a65; }
+  .rdo-info .stat.ok .num { color: #8fdc8e; }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .swatch {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--line);
+    text-align: center;
+    line-height: 20px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .swatch.wide {
+    width: 34px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .swatch.work { background: white; }
+  .swatch.rdo { background: var(--rdo); color: white; border-color: var(--rdo); }
+  .swatch.vac { background: var(--vac); color: white; border-color: var(--vac); }
+  .swatch.rdo2 { background: #d97a3d; color: white; border-color: #d97a3d; }
+  .swatch.vac2 { background: var(--vac); color: white; border-color: var(--vac); }
+  .swatch.split {
+    background: linear-gradient(to bottom, var(--rdo) 50%, #d97a3d 50%);
+    color: white;
+    border-color: var(--ink-soft);
+  }
+  .swatch.holiday {
+    background: white;
+    color: #b8941f;
+    font-weight: 700;
+  }
+  .swatch.fed-holiday {
+    background: white;
+    color: var(--ink-soft);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+  .day-head {
+    background: var(--navy-deep);
+    color: var(--gold-bright);
+    text-align: center;
+    padding: 8px 4px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .day {
+    aspect-ratio: 1 / 1;
+    background: white;
+    border: 1px solid var(--line);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 8px;
+    transition: all 0.1s ease;
+    position: relative;
+    min-height: 64px;
+    overflow: hidden;
+  }
+  .day:hover {
+    border-color: var(--navy);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(10, 31, 61, 0.15);
+  }
+  .day.weekend { background: var(--weekend); }
+  .day .date {
+    font-size: 11px;
+    color: var(--ink-soft);
+    font-weight: 500;
+    position: relative;
+    z-index: 2;
+  }
+  .day .num {
+    font-family: 'Oswald', sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-top: 2px;
+    position: relative;
+    z-index: 2;
+  }
+  .day .mark {
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    z-index: 2;
+    color: white;
+    /* Heavy black outline so the code is high-contrast on any background */
+    text-shadow:
+      -1.2px -1.2px 0 #000,
+       1.2px -1.2px 0 #000,
+      -1.2px  1.2px 0 #000,
+       1.2px  1.2px 0 #000,
+       0    -1.2px 0 #000,
+       0     1.2px 0 #000,
+      -1.2px  0    0 #000,
+       1.2px  0    0 #000;
+  }
+  /* Holiday $ icon in top-right corner */
+  .day .holiday-mark {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: #b8941f;
+    z-index: 3;
+    line-height: 1;
+    text-shadow: 0 0 2px white, 0 0 2px white;
+  }
+
+  /* Diagonal holiday name across cell */
+  .day .holiday-name {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 1;
+    font-family: 'Oswald', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(184, 148, 31, 0.55);
+    transform: rotate(-22deg);
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+    text-align: center;
+    line-height: 1.05;
+    overflow: hidden;
+    padding: 0 2px;
+  }
+  /* Federal-only holidays (not paid) get a subtler color */
+  .day.is-holiday:not(.is-paid-holiday) .holiday-name {
+    color: rgba(74, 74, 74, 0.45);
+  }
+  /* When a state fill is on, brighten so it's still legible over color */
+  .day.s1-rdo .holiday-name, .day.s2-rdo .holiday-name,
+  .day.s1-vac .holiday-name, .day.s2-vac .holiday-name {
+    color: rgba(255, 255, 255, 0.55);
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+  }
+  .day.s1-rdo .holiday-mark, .day.s2-rdo .holiday-mark,
+  .day.s1-vac .holiday-mark, .day.s2-vac .holiday-mark {
+    color: #ffd966;
+    text-shadow: 0 0 2px rgba(0,0,0,0.5);
+  }
+
+  /* Color layers: cells use background layers for split rendering */
+  .day .layer-1, .day .layer-2 {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .day .layer-1 { top: 0; bottom: 0; }
+  .day .layer-2 { top: 0; bottom: 0; }
+
+  /* SINGLE VIEW (1st only or 2nd only) — existing single-fill states */
+  .day.v-1.s1-rdo, .day.v-2.s2-rdo  { background: var(--rdo); border-color: var(--rdo); }
+  .day.v-1.s1-vac { background: var(--vac); border-color: var(--vac); }
+  .day.v-1.s1-other { background: #3a3a42; border-color: #3a3a42; }
+  .day.v-2.s2-rdo { background: #d97a3d; border-color: #d97a3d; }
+  .day.v-2.s2-vac { background: var(--vac); border-color: var(--vac); }
+  .day.v-2.s2-other { background: #2a2a32; border-color: #2a2a32; }
+
+  .day.v-1.s1-rdo .date, .day.v-1.s1-rdo .num, .day.v-1.s1-rdo .mark,
+  .day.v-1.s1-vac .date, .day.v-1.s1-vac .num, .day.v-1.s1-vac .mark,
+  .day.v-1.s1-other .date, .day.v-1.s1-other .num, .day.v-1.s1-other .mark,
+  .day.v-2.s2-rdo .date, .day.v-2.s2-rdo .num, .day.v-2.s2-rdo .mark,
+  .day.v-2.s2-vac .date, .day.v-2.s2-vac .num, .day.v-2.s2-vac .mark,
+  .day.v-2.s2-other .date, .day.v-2.s2-other .num, .day.v-2.s2-other .mark
+    { color: white; }
+
+  /* Single-view: hide the active-view's both-mode mark (it's redundant with .mark),
+     but show the OTHER choice's mark colored to match its choice — visually indicating
+     "this day has the other choice set." */
+  .day.v-1 .mark-1, .day.v-2 .mark-2 { display: none !important; }
+
+  /* In 1st-choice view, when the cell has a 2nd-choice mark and no 1st-choice fill,
+     render mark-2 in the 2nd-choice orange so it's identifiable.
+     Position at top-right so it doesn't collide with .mark (bottom-right). */
+  .day.v-1 .mark-2 {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: var(--rdo2-text, #c66432);
+    z-index: 2;
+    letter-spacing: 0.02em;
+  }
+  .day.v-1.s2-rdo .mark-2 { color: #c66432; } /* matches 2nd RDO orange */
+  .day.v-1.s2-vac .mark-2 { color: var(--vac); } /* matches Vac color */
+  .day.v-1.s2-other .mark-2 { color: #2a2a32; } /* matches 2nd "other" dark gray */
+  /* When the cell IS a 1st-choice fill (blue/crimson/dark gray), show the 2nd cross-mark in a
+     light contrasting color so it remains visible. */
+  .day.v-1.s1-rdo.s2-rdo .mark-2,
+  .day.v-1.s1-vac.s2-rdo .mark-2,
+  .day.v-1.s1-other.s2-rdo .mark-2 { color: #ffae73; }
+  .day.v-1.s1-rdo.s2-vac .mark-2,
+  .day.v-1.s1-vac.s2-vac .mark-2,
+  .day.v-1.s1-other.s2-vac .mark-2 { color: #ffae73; }
+  .day.v-1.s1-rdo.s2-other .mark-2,
+  .day.v-1.s1-vac.s2-other .mark-2,
+  .day.v-1.s1-other.s2-other .mark-2 { color: #b8b8c0; }
+
+  /* In 2nd-choice view, mark-1 indicates a 1st-choice mark exists, colored in 1st blue */
+  .day.v-2 .mark-1 {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: #1a4d7a;
+    z-index: 2;
+    letter-spacing: 0.02em;
+  }
+  .day.v-2.s1-rdo .mark-1 { color: #1a4d7a; }
+  .day.v-2.s1-vac .mark-1 { color: var(--vac); }
+  .day.v-2.s1-other .mark-1 { color: #3a3a42; } /* matches 1st "other" dark gray */
+  /* If the cell is a 2nd-choice fill, lighten the 1st cross-mark to remain visible. */
+  .day.v-2.s2-rdo.s1-rdo .mark-1,
+  .day.v-2.s2-vac.s1-rdo .mark-1,
+  .day.v-2.s2-other.s1-rdo .mark-1 { color: #7fb6ea; }
+  .day.v-2.s2-rdo.s1-vac .mark-1,
+  .day.v-2.s2-vac.s1-vac .mark-1,
+  .day.v-2.s2-other.s1-vac .mark-1 { color: #f0a48a; }
+  .day.v-2.s2-rdo.s1-other .mark-1,
+  .day.v-2.s2-vac.s1-other .mark-1,
+  .day.v-2.s2-other.s1-other .mark-1 { color: #b8b8c0; }
+
+  /* In single view, hide the .mark element if it would overlap with the cross-choice
+     indicator. .mark already shows for the active state via JS, in white-on-fill.
+     We need to keep it visible only when its own state is set; otherwise hide it. */
+  .day.v-1:not(.s1-rdo):not(.s1-vac):not(.s1-other) .mark { display: none; }
+  .day.v-2:not(.s2-rdo):not(.s2-vac):not(.s2-other) .mark { display: none; }
+
+  /* BOTH VIEW — split top half = state1, bottom half = state2 */
+  .day.v-both .layer-1 { top: 0; bottom: 50%; }
+  .day.v-both .layer-2 { top: 50%; bottom: 0; }
+  .day.v-both .layer-1.fill-rdo { background: var(--rdo); }
+  .day.v-both .layer-1.fill-vac { background: var(--vac); }
+  .day.v-both .layer-1.fill-other { background: #3a3a42; }
+  .day.v-both .layer-2.fill-rdo { background: #d97a3d; }
+  .day.v-both .layer-2.fill-vac { background: var(--vac); }
+  .day.v-both .layer-2.fill-other { background: #1f1f25; }
+
+  .day.v-both .date { font-size: 9px; }
+  .day.v-both .num { font-size: 13px; line-height: 1; margin-top: 0; }
+  .day.v-both .num.has-fill {
+    color: white;
+    /* 4-direction black outline so white numbers stay legible against any half-fill */
+    text-shadow:
+      -1px -1px 0 #000,
+       1px -1px 0 #000,
+      -1px  1px 0 #000,
+       1px  1px 0 #000,
+       0   -1px 0 #000,
+       0    1px 0 #000,
+      -1px  0   0 #000,
+       1px  0   0 #000;
+  }
+  .day.v-both .date.has-fill {
+    color: rgba(255,255,255,0.95);
+    text-shadow:
+      -1px -1px 0 #000,
+       1px -1px 0 #000,
+      -1px  1px 0 #000,
+       1px  1px 0 #000;
+  }
+
+  .day.v-both .mark-1 {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    color: white;
+    z-index: 2;
+    letter-spacing: 0.02em;
+    display: none;
+    text-shadow:
+      -1px -1px 0 #000,  1px -1px 0 #000,
+      -1px  1px 0 #000,  1px  1px 0 #000,
+       0   -1px 0 #000,  0    1px 0 #000,
+      -1px  0   0 #000,  1px  0   0 #000;
+  }
+  .day.v-both .mark-2 {
+    position: absolute;
+    bottom: 3px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: white;
+    z-index: 2;
+    letter-spacing: 0.02em;
+    display: none;
+    text-shadow:
+      -1px -1px 0 #000,  1px -1px 0 #000,
+      -1px  1px 0 #000,  1px  1px 0 #000,
+       0   -1px 0 #000,  0    1px 0 #000,
+      -1px  0   0 #000,  1px  0   0 #000;
+  }
+  .day.v-both .mark { display: none; }
+  .day.v-both.s1-rdo .mark-1, .day.v-both.s1-vac .mark-1, .day.v-both.s1-other .mark-1,
+  .day.v-both.s2-rdo .mark-2, .day.v-both.s2-vac .mark-2, .day.v-both.s2-other .mark-2 { display: block; }
+
+  /* Hover highlight for click halves (both view only) */
+  .day.v-both .half-hint-top, .day.v-both .half-hint-bot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .day.v-both .half-hint-top { top: 0; bottom: 50%; background: rgba(10, 31, 61, 0.08); }
+  .day.v-both .half-hint-bot { top: 50%; bottom: 0; background: rgba(217, 122, 61, 0.12); }
+  .day.v-both:hover .half-hint-top { opacity: 0; }
+  .day.v-both .day-half-top:hover ~ .half-hint-top { opacity: 1; }
+
+  /* Click target halves (invisible, inside both-view cells) */
+  .day-half-top, .day-half-bot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 4;
+    cursor: pointer;
+  }
+  .day-half-top { top: 0; height: 50%; }
+  .day-half-bot { top: 50%; bottom: 0; }
+
+  /* ===== ACTIONS ===== */
+  .actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+  .btn {
+    padding: 12px 28px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 2px solid var(--navy);
+    background: white;
+    color: var(--navy);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-weight: 500;
+  }
+  .btn:hover { background: var(--paper-dark); }
+  .btn.primary {
+    background: var(--navy);
+    color: white;
+  }
+  .btn.primary:hover {
+    background: var(--navy-deep);
+    border-color: var(--navy-deep);
+  }
+  .btn.primary:disabled {
+    background: var(--line);
+    border-color: var(--line);
+    color: var(--ink-soft);
+    cursor: not-allowed;
+  }
+  .btn.ghost {
+    border-color: var(--line);
+    color: var(--ink-soft);
+  }
+
+  .hidden { display: none !important; }
+
+  /* Long-press / right-click context menu on calendar half-cells */
+  .ctx-menu {
+    position: fixed;
+    background: var(--navy);
+    border: 1px solid var(--gold);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    padding: 4px;
+    z-index: 200;
+    min-width: 220px;
+    user-select: none;
+  }
+  .ctx-menu .ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-family: 'Oswald', sans-serif;
+    transition: background 0.1s;
+  }
+  .ctx-menu .ctx-item:hover {
+    background: rgba(201, 169, 97, 0.18);
+  }
+  .ctx-menu .ctx-item .ctx-label {
+    display: inline-block;
+    min-width: 36px;
+    text-align: center;
+    background: var(--paper);
+    color: var(--navy);
+    padding: 3px 8px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--gold);
+  }
+  .ctx-menu .ctx-item .ctx-name {
+    color: var(--paper);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .ctx-menu .ctx-item.ctx-clear {
+    border-top: 1px solid rgba(201, 169, 97, 0.3);
+    margin-top: 4px;
+    padding-top: 12px;
+  }
+  .ctx-menu .ctx-item.ctx-clear .ctx-label {
+    color: var(--ink-soft);
+    background: transparent;
+    border-color: var(--ink-soft);
+  }
+  .ctx-menu .ctx-item.ctx-clear .ctx-name {
+    color: var(--ink-soft);
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--navy);
+    color: white;
+    padding: 14px 24px;
+    border-left: 4px solid var(--gold);
+    font-size: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease;
+    z-index: 100;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-left-color: #ff6b35; }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 12px 10px 60px; }
+    header { padding: 18px 18px; }
+    .title-block h1 { font-size: 22px; }
+    .picker { padding: 16px; }
+    .card { padding: 18px; }
+    .field-grid { grid-template-columns: 1fr; }
+    .field-grid.four-col { grid-template-columns: 1fr 1fr; }
+    .day { min-height: 52px; padding: 4px 5px; }
+    .day .num { font-size: 16px; }
+    .day .date { font-size: 10px; }
+    .day .mark { font-size: 12px; bottom: 2px; }
+    .day-head { font-size: 9px; padding: 6px 2px; letter-spacing: 0.08em; }
+    .mode-btn { flex: 1; padding: 10px 12px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge-row">
+      <img class="shield" alt="Airport Police Dispatch badge" src="data:image/png;base64,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">
+      <div class="title-block">
+        <h1>Watch &amp; RDO Bid</h1>
+        <div class="subtitle">Airport Police Dispatch</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="picker">
+    <span class="picker-label">Bid Type:</span>
+    <button class="mode-btn active" data-mode="watch" type="button">Watch Bid</button>
+    <button class="mode-btn" data-mode="rdo" type="button">RDO Bid</button>
+  </div>
+
+  <!-- ===== WATCH BID FORM ===== -->
+  <section id="watch-form" class="card">
+    <div class="card-title">Watch Assignment Bid</div>
+
+    <div class="field-grid four-col">
+      <div class="field">
+        <label for="w-name">Dispatcher Name</label>
+        <input type="text" id="w-name" placeholder="Last, First M." autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="w-curwatch">Current Watch</label>
+        <select id="w-curwatch">
+          <option value="">—</option>
+          <option value="1">Watch 1</option>
+          <option value="2">Watch 2</option>
+          <option value="3">Watch 3</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="w-serial">Serial Number</label>
+        <input type="text" id="w-serial" placeholder="e.g. A1234" inputmode="text" autocapitalize="characters">
+        <!-- Mobile keypad. Letter row is enforced first; numbers light up only
+             after a letter is committed, per dispatch's 1-letter + 4-digit serial
+             format. Desktop users see this hidden via CSS media query. -->
+        <div class="serial-keypad" id="w-serial-keypad" aria-hidden="true">
+          <div class="serial-keypad-row letters">
+            <button type="button" class="skp-key letter" data-c="A">A</button>
+            <button type="button" class="skp-key letter" data-c="B">B</button>
+            <button type="button" class="skp-key letter" data-c="C">C</button>
+            <button type="button" class="skp-key letter" data-c="D">D</button>
+            <button type="button" class="skp-key letter" data-c="E">E</button>
+            <button type="button" class="skp-key letter" data-c="F">F</button>
+          </div>
+          <div class="serial-keypad-row digits">
+            <button type="button" class="skp-key digit" data-c="1">1</button>
+            <button type="button" class="skp-key digit" data-c="2">2</button>
+            <button type="button" class="skp-key digit" data-c="3">3</button>
+            <button type="button" class="skp-key digit" data-c="4">4</button>
+            <button type="button" class="skp-key digit" data-c="5">5</button>
+            <button type="button" class="skp-key digit" data-c="6">6</button>
+            <button type="button" class="skp-key digit" data-c="7">7</button>
+            <button type="button" class="skp-key digit" data-c="8">8</button>
+            <button type="button" class="skp-key digit" data-c="9">9</button>
+          </div>
+          <div class="serial-keypad-row actions">
+            <button type="button" class="skp-key action bksp" data-act="bksp">⌫ Back</button>
+            <button type="button" class="skp-key digit" data-c="0">0</button>
+            <button type="button" class="skp-key action clr" data-act="clr">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="w-rank">Classification</label>
+        <select id="w-rank">
+          <option value="Communications Information Representative">Communications Information Representative</option>
+          <option value="Senior Communications Operator">Senior Communications Operator</option>
+          <option value="Principal Communications Operator">Principal Communications Operator</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label for="w-startdp">Bid Period (3 DPs)</label>
+        <select id="w-startdp"></select>
+      </div>
+    </div>
+
+    <!-- BID MODE TOGGLE: single period vs full year -->
+    <div class="bid-mode-toggle" id="bid-mode-toggle" role="tablist" aria-label="Bid mode">
+      <button type="button" class="bm-opt active" data-mode="single" role="tab" aria-selected="true">Single Period</button>
+      <button type="button" class="bm-opt" data-mode="fullYear" role="tab" aria-selected="false">Full Year</button>
+    </div>
+
+    <!-- Full-year mode: year picker (only DP 1 of selected year) -->
+    <div class="field full" id="w-year-wrap" style="display:none; margin-top: 8px;">
+      <label for="w-year">Year</label>
+      <select id="w-year"></select>
+    </div>
+
+    <div class="dp-range" id="w-range">
+      <strong>Bid Period:</strong>
+      <div class="dp-range-list" id="w-range-list">—</div>
+    </div>
+
+    <!-- Single-period watch picker (default) -->
+    <div id="watch-single">
+      <label style="display:block; margin-bottom: 10px;">Requested Watch Assignment (entire bid period)</label>
+      <div class="watch-options">
+        <div class="watch-opt" data-w="1">
+          <div class="w-num">1</div>
+          <div class="w-label">Watch One</div>
+          <div class="w-status">— Not Selected —</div>
+        </div>
+        <div class="watch-opt" data-w="2">
+          <div class="w-num">2</div>
+          <div class="w-label">Watch Two</div>
+          <div class="w-status">— Not Selected —</div>
+        </div>
+        <div class="watch-opt" data-w="3">
+          <div class="w-num">3</div>
+          <div class="w-label">Watch Three</div>
+          <div class="w-status">— Not Selected —</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full-year watch pickers (4 cards, one per DP group) -->
+    <div id="watch-fullyear" style="display:none;">
+      <label style="display:block; margin-bottom: 10px;">Requested Watch Assignment per DP Group</label>
+      <div class="fy-watch-groups" id="fy-watch-groups"><!-- populated by JS --></div>
+    </div>
+
+    <div class="field full" style="margin-top: 24px;">
+      <label for="w-notes">Comments / Special Considerations (optional)</label>
+      <input type="text" id="w-notes" placeholder="e.g. seniority date, schedule preference, etc.">
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" type="button" onclick="forgetOfficer()">Forget My Info</button>
+      <button class="btn ghost" type="button" onclick="resetWatch()">Reset</button>
+      <button class="btn primary" type="button" id="w-submit" onclick="generateWatchPDF()">Generate PDF</button>
+    </div>
+  </section>
+
+  <!-- ===== RDO BID FORM ===== -->
+  <section id="rdo-form" class="card hidden">
+    <div class="card-title">RDO Bid</div>
+
+    <!-- Dispatcher info — read-only display, mirrors values entered on the Watch BID page. -->
+    <div class="rdo-officer-display">
+      <div class="rdo-officer-field">
+        <span class="rdo-officer-label">Classification</span>
+        <span class="rdo-officer-value" id="r-rank-display">—</span>
+      </div>
+      <div class="rdo-officer-field">
+        <span class="rdo-officer-label">Dispatcher</span>
+        <span class="rdo-officer-value" id="r-name-display">—</span>
+      </div>
+      <div class="rdo-officer-field">
+        <span class="rdo-officer-label">Serial #</span>
+        <span class="rdo-officer-value" id="r-serial-display">—</span>
+      </div>
+      <div class="rdo-officer-field">
+        <span class="rdo-officer-label">Watch</span>
+        <span class="rdo-officer-value" id="r-watch-display">—</span>
+      </div>
+      <span class="rdo-officer-edit-hint">Edit on Watch BID</span>
+    </div>
+
+    <div id="rdo-slots"></div>
+
+    <div class="actions">
+      <button class="btn ghost" type="button" onclick="resetRDO()">Reset All Days</button>
+      <button class="btn primary" type="button" onclick="generateRDOPDF()">Generate PDF</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   DP CALENDAR
+   Anchor: DP7 = Sunday, June 28, 2026
+   13 DPs per year × 28 days = 364 days
+   ============================================================ */
+const DP_ANCHOR = { dp: 7, year: 2026, start: new Date(2026, 5, 28) };
+
+function getDPInfo(dpNum, year) {
+  const yearDiff = year - DP_ANCHOR.year;
+  const dpDiff = (dpNum - DP_ANCHOR.dp) + (yearDiff * 13);
+  const start = new Date(DP_ANCHOR.start);
+  start.setDate(start.getDate() + dpDiff * 28);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 27);
+  return {
+    dp: dpNum,
+    year: year,
+    start: start,
+    end: end,
+    label: `DP ${dpNum} ${year}`
+  };
+}
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function fmtDate(d) {
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+function fmtMDY(d) {
+  return `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+function fmtDateLong(d) {
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return `${days[d.getDay()]}, ${MONTHS_FULL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/* ============================================================
+   POPULATE DP DROPDOWNS
+   ============================================================ */
+
+// Bid mode: "single" (today's default — pick one watch for the bid period) or
+// "fullYear" (4 watch picks, one per DP group; RDO panel shows all 13 DPs).
+// Declared early because several helper functions (updateWatchRange, getRDOStartDP,
+// numDPsInGroup) branch on it.
+let bidMode = 'single';
+function isFullYear() { return bidMode === 'fullYear'; }
+
+// Watch form: group DPs by year as 1-3, 4-6, 7-9, 10-13. The last group of each
+// year contains 4 DPs; all others have 3. Groups never cross a year boundary.
+function dpGroupForYearAndStartDP(dpNum) {
+  // Returns [startDP, endDP] for the group containing dpNum.
+  if (dpNum <= 3) return [1, 3];
+  if (dpNum <= 6) return [4, 6];
+  if (dpNum <= 9) return [7, 9];
+  return [10, 13];
+}
+
+function buildWatchDPOptions(selectEl) {
+  selectEl.innerHTML = '';
+  const now = new Date();
+
+  // Build a list of all groups across the years we care about: from 1 year before
+  // the anchor through ~4 years after.
+  const groups = [];
+  const startYear = DP_ANCHOR.year - 1;
+  const endYear = DP_ANCHOR.year + 4;
+  for (let yr = startYear; yr <= endYear; yr++) {
+    [[1, 3], [4, 6], [7, 9], [10, 13]].forEach(([first, last]) => {
+      const dpsInGroup = [];
+      for (let dp = first; dp <= last; dp++) dpsInGroup.push(getDPInfo(dp, yr));
+      groups.push(dpsInGroup);
+    });
+  }
+
+  groups.forEach(g => {
+    // Skip groups whose final DP ended before today.
+    if (g[g.length - 1].end < now) return;
+    const opt = document.createElement('option');
+    opt.value = `${g[0].dp}-${g[0].year}`;
+    const dpLabel = `DP ${g[0].dp}–${g[g.length - 1].dp}`;
+    opt.textContent = `${dpLabel} • ${g[0].year} (${fmtDate(g[0].start)} – ${fmtDate(g[g.length - 1].end)})`;
+    selectEl.appendChild(opt);
+  });
+
+  // Default: anchor's containing group (DP 7-9 of 2026 currently).
+  const [anchorFirst] = dpGroupForYearAndStartDP(DP_ANCHOR.dp);
+  const defaultVal = `${anchorFirst}-${DP_ANCHOR.year}`;
+  const anchorOpt = Array.from(selectEl.options).find(o => o.value === defaultVal);
+  if (anchorOpt) anchorOpt.selected = true;
+  else if (selectEl.options.length > 0) selectEl.selectedIndex = 0;
+}
+
+// RDO form: list every DP individually
+function buildDPOptions(selectEl) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const years = [currentYear, currentYear + 1];
+  selectEl.innerHTML = '';
+  years.forEach(year => {
+    for (let dp = 1; dp <= 13; dp++) {
+      const info = getDPInfo(dp, year);
+      if (info.end < now && !(year === currentYear && dp >= 1)) continue;
+      const opt = document.createElement('option');
+      opt.value = `${dp}-${year}`;
+      opt.textContent = `DP ${dp} • ${year} (${fmtDate(info.start)} – ${fmtDate(info.end)})`;
+      if (year === DP_ANCHOR.year && dp === DP_ANCHOR.dp) opt.selected = true;
+      selectEl.appendChild(opt);
+    }
+  });
+}
+
+const wStartDP = document.getElementById('w-startdp');
+buildWatchDPOptions(wStartDP);
+
+/* ============================================================
+   MASTER PICKER
+   ============================================================ */
+const watchForm = document.getElementById('watch-form');
+const rdoForm = document.getElementById('rdo-form');
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (btn.dataset.mode === 'watch') {
+      watchForm.classList.remove('hidden');
+      rdoForm.classList.add('hidden');
+    } else {
+      watchForm.classList.add('hidden');
+      rdoForm.classList.remove('hidden');
+    }
+  });
+});
+
+/* ============================================================
+   WATCH FORM — DP RANGE DISPLAY
+   ============================================================ */
+const wRangeList = document.getElementById('w-range-list');
+function updateWatchRange() {
+  if (isFullYear()) {
+    // In full-year mode the range is implied by the year picker; covers all 13 DPs.
+    const yr = +wYearSel.value;
+    const first = getDPInfo(1, yr);
+    const last = getDPInfo(13, yr);
+    wRangeList.innerHTML = `${fmtDate(first.start)} through ${fmtDate(last.end)}<br>` +
+      `<span style="font-size:12px;">All 13 DPs of ${yr}</span>`;
+    return;
+  }
+  const [dp, yr] = wStartDP.value.split('-').map(Number);
+  const [first, last] = dpGroupForYearAndStartDP(dp);
+  const n = last - first + 1;
+  const dps = [];
+  for (let i = 0; i < n; i++) {
+    let curDP = dp + i;
+    let curYr = yr;
+    if (curDP > 13) { curDP -= 13; curYr += 1; }
+    dps.push(getDPInfo(curDP, curYr));
+  }
+  const rangeStr = `${fmtDate(dps[0].start)} through ${fmtDate(dps[n - 1].end)}`;
+  const dpListStr = dps.map(d => `DP ${d.dp}/${d.year}`).join(' • ');
+  wRangeList.innerHTML = `${rangeStr}<br><span style="font-size:12px;">${dpListStr}</span>`;
+}
+wStartDP.addEventListener('change', updateWatchRange);
+updateWatchRange();
+
+/* ============================================================
+   FULL-YEAR YEAR PICKER + BID MODE TOGGLE
+   ============================================================ */
+const wYearSel = document.getElementById('w-year');
+function buildYearOptions() {
+  wYearSel.innerHTML = '';
+  const now = new Date();
+  // Show years whose DP 13 hasn't ended yet (relevant for a forward-looking bid).
+  for (let yr = DP_ANCHOR.year - 1; yr <= DP_ANCHOR.year + 4; yr++) {
+    const last = getDPInfo(13, yr);
+    if (last.end < now) continue;
+    const first = getDPInfo(1, yr);
+    const opt = document.createElement('option');
+    opt.value = String(yr);
+    opt.textContent = `${yr} — ${fmtDate(first.start)} through ${fmtDate(last.end)}`;
+    wYearSel.appendChild(opt);
+  }
+  if (wYearSel.options.length > 0) {
+    // Default to the year that contains today, falling back to first available.
+    const todayYear = String(now.getFullYear());
+    const match = Array.from(wYearSel.options).find(o => o.value === todayYear);
+    if (match) match.selected = true;
+  }
+}
+buildYearOptions();
+wYearSel.addEventListener('change', () => {
+  updateWatchRange();
+  rebuildFullYearUI();
+  buildAllSlots();
+});
+
+const bidModeToggle = document.getElementById('bid-mode-toggle');
+const wYearWrap = document.getElementById('w-year-wrap');
+const wStartDPWrap = wStartDP.closest('.field');
+const watchSingleWrap = document.getElementById('watch-single');
+const watchFullYearWrap = document.getElementById('watch-fullyear');
+
+function setBidMode(mode) {
+  bidMode = mode;
+  bidModeToggle.querySelectorAll('.bm-opt').forEach(b => {
+    const isActive = b.dataset.mode === mode;
+    b.classList.toggle('active', isActive);
+    b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  if (mode === 'fullYear') {
+    wStartDPWrap.style.display = 'none';
+    wYearWrap.style.display = '';
+    watchSingleWrap.style.display = 'none';
+    watchFullYearWrap.style.display = '';
+    rebuildFullYearUI();
+  } else {
+    wStartDPWrap.style.display = '';
+    wYearWrap.style.display = 'none';
+    watchSingleWrap.style.display = '';
+    watchFullYearWrap.style.display = 'none';
+  }
+  updateWatchRange();
+  buildAllSlots();
+}
+bidModeToggle.querySelectorAll('.bm-opt').forEach(btn => {
+  btn.addEventListener('click', () => setBidMode(btn.dataset.mode));
+});
+
+// Build the 4 per-group watch picker cards (full-year mode).
+const fyWatchGroupsEl = document.getElementById('fy-watch-groups');
+function rebuildFullYearUI() {
+  const yr = +wYearSel.value;
+  const groups = [[1, 3], [4, 6], [7, 9], [10, 13]];
+  fyWatchGroupsEl.innerHTML = '';
+  groups.forEach((range, groupIdx) => {
+    const [first, last] = range;
+    const startInfo = getDPInfo(first, yr);
+    const endInfo = getDPInfo(last, yr);
+    const card = document.createElement('div');
+    card.className = 'fy-watch-group';
+    card.dataset.group = groupIdx;
+    card.innerHTML = `
+      <div class="fy-head">
+        <span class="fy-title">DPs ${first}–${last}</span>
+        <span class="fy-range">${fmtDate(startInfo.start)} – ${fmtDate(endInfo.end)}</span>
+      </div>
+      <div class="watch-options">
+        <div class="watch-opt" data-w="1"><div class="w-num">1</div><div class="w-label">Watch One</div><div class="w-status">— Not Selected —</div></div>
+        <div class="watch-opt" data-w="2"><div class="w-num">2</div><div class="w-label">Watch Two</div><div class="w-status">— Not Selected —</div></div>
+        <div class="watch-opt" data-w="3"><div class="w-num">3</div><div class="w-label">Watch Three</div><div class="w-status">— Not Selected —</div></div>
+      </div>`;
+    // Wire up the watch picker for this group, mirroring the single-mode picker logic.
+    card.querySelectorAll('.watch-opt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const w = +opt.dataset.w;
+        const st = watchStateGroups[groupIdx];
+        const cur = (st.c1 === w) ? '1' : (st.c2 === w) ? '2' : 'off';
+        if (cur === 'off') {
+          if (st.c1 == null) st.c1 = w; else st.c2 = w;
+        } else if (cur === '1') {
+          // 1st → 2nd: bump prior 2nd off if any, then promote to 2nd
+          if (st.c2 != null) st.c2 = null;
+          st.c1 = null;
+          st.c2 = w;
+        } else {
+          // 2nd → off
+          st.c2 = null;
+        }
+        refreshFullYearWatchCard(groupIdx);
+      });
+    });
+    fyWatchGroupsEl.appendChild(card);
+    refreshFullYearWatchCard(groupIdx);
+  });
+}
+function refreshFullYearWatchCard(groupIdx) {
+  const card = fyWatchGroupsEl.querySelector(`.fy-watch-group[data-group="${groupIdx}"]`);
+  if (!card) return;
+  const st = watchStateGroups[groupIdx];
+  card.querySelectorAll('.watch-opt').forEach(opt => {
+    const w = +opt.dataset.w;
+    opt.classList.remove('c-1', 'c-2');
+    const status = opt.querySelector('.w-status');
+    if (st.c1 === w)      { opt.classList.add('c-1'); status.textContent = '1st Choice'; }
+    else if (st.c2 === w) { opt.classList.add('c-2'); status.textContent = '2nd Choice'; }
+    else                  { status.textContent = '— Not Selected —'; }
+  });
+}
+
+/* ============================================================
+   WATCH 1ST / 2ND CHOICE PICKER
+   Each button cycles its own state: off → 1st → 2nd → off.
+   Setting a watch to 1st bumps any other watch currently at 1st to off.
+   Same rule for 2nd.
+   ============================================================ */
+// State: { c1: <watch# or null>, c2: <watch# or null> } — used in single-period mode.
+const watchState = { c1: null, c2: null };
+
+// Full-year mode state: 4 sets of {c1, c2}, one per DP group (1-3, 4-6, 7-9, 10-13).
+const watchStateGroups = [
+  { c1: null, c2: null },
+  { c1: null, c2: null },
+  { c1: null, c2: null },
+  { c1: null, c2: null },
+];
+
+// Bid mode is declared earlier in the file (before any helpers that branch on it).
+
+document.querySelectorAll('.watch-opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    const w = +opt.dataset.w;
+    const cur = (watchState.c1 === w) ? '1' : (watchState.c2 === w) ? '2' : 'off';
+
+    if (cur === 'off') {
+      // Off → take the next open slot.
+      // No 1st? become 1st. Else become 2nd (bumping any existing 2nd off).
+      if (watchState.c1 == null) {
+        watchState.c1 = w;
+      } else {
+        watchState.c2 = w;
+      }
+    } else if (cur === '1') {
+      // 1st → demote to 2nd; bump any prior 2nd off.
+      watchState.c1 = null;
+      watchState.c2 = w;
+    } else { // cur === '2'
+      // 2nd: if a 1st exists elsewhere, promote this to 1st (and turn that off).
+      // Else turn off.
+      if (watchState.c1 != null) {
+        watchState.c1 = w;
+        watchState.c2 = null;
+      } else {
+        watchState.c2 = null;
+      }
+    }
+
+    paintWatchPicker();
+  });
+});
+
+function paintWatchPicker() {
+  document.querySelectorAll('.watch-opt').forEach(opt => {
+    const w = +opt.dataset.w;
+    opt.classList.remove('c-1', 'c-2');
+    const status = opt.querySelector('.w-status');
+    if (watchState.c1 === w) {
+      opt.classList.add('c-1');
+      status.textContent = '1ST CHOICE';
+    } else if (watchState.c2 === w) {
+      opt.classList.add('c-2');
+      status.textContent = '2ND CHOICE';
+    } else {
+      status.textContent = '— Not Selected —';
+    }
+  });
+}
+
+paintWatchPicker();
+
+/* ============================================================
+   SERIAL NUMBER — 1 letter (A–F) + 4 numeric digits, no leading-zero stripping.
+   Examples of valid serials: A1234, B0007, F9999.
+   ============================================================ */
+const SERIAL_PATTERN = /^[A-F][0-9]{4}$/;
+
+function setupSerialField(inputEl) {
+  inputEl.setAttribute('inputmode', 'text');
+  inputEl.setAttribute('pattern', '[A-Fa-f][0-9]{4}');
+  inputEl.setAttribute('maxlength', '5');
+  // Force-uppercase the letter prefix and reject any character that doesn't
+  // belong in its position. Position 0: A-F only. Positions 1-4: 0-9 only.
+  inputEl.addEventListener('input', () => {
+    const v = inputEl.value.toUpperCase();
+    let cleaned = '';
+    for (let i = 0; i < v.length && cleaned.length < 5; i++) {
+      const c = v[i];
+      if (cleaned.length === 0) {
+        if (/[A-F]/.test(c)) cleaned += c;
+      } else {
+        if (/[0-9]/.test(c)) cleaned += c;
+      }
+    }
+    if (inputEl.value !== cleaned) inputEl.value = cleaned;
+    refreshSerialKeypad();
+  });
+}
+setupSerialField(document.getElementById('w-serial'));
+
+/* ============================================================
+   MOBILE SERIAL KEYPAD
+   Manages the on-screen keypad below the serial input. Disables the OS
+   keyboard on mobile (via readOnly) so taps go through the keypad rather than
+   the native input field. The desktop case (no coarse pointer, wide viewport)
+   leaves the input fully editable.
+   ============================================================ */
+function isMobileSerialContext() {
+  return window.matchMedia('(pointer: coarse), (max-width: 720px)').matches;
+}
+
+const serialInputEl = document.getElementById('w-serial');
+const serialKeypadEl = document.getElementById('w-serial-keypad');
+
+function refreshSerialKeypad() {
+  // Sync per-row enabled state to the current input value length and content.
+  const v = serialInputEl.value;
+  const hasLetter = v.length >= 1 && /[A-F]/.test(v[0]);
+  const isFull = v.length >= 5;
+
+  // Letter row: disabled once a letter is committed (or full).
+  serialKeypadEl.querySelectorAll('.skp-key.letter').forEach(btn => {
+    const disabled = hasLetter || isFull;
+    btn.disabled = disabled;
+    btn.classList.toggle('active-row', !disabled);
+  });
+  // Digit row: enabled only after the letter is committed and not full.
+  serialKeypadEl.querySelectorAll('.skp-key.digit').forEach(btn => {
+    const disabled = !hasLetter || isFull;
+    btn.disabled = disabled;
+    btn.classList.toggle('active-row', !disabled);
+  });
+  // Action keys: backspace enabled if any chars; clear enabled if any chars.
+  serialKeypadEl.querySelectorAll('.skp-key.action').forEach(btn => {
+    btn.disabled = v.length === 0;
+  });
+}
+
+function appendSerialChar(c) {
+  const v = serialInputEl.value;
+  if (v.length >= 5) return;
+  // Position 0 must be A-F; positions 1-4 must be 0-9.
+  if (v.length === 0 && !/[A-F]/.test(c)) return;
+  if (v.length > 0 && !/[0-9]/.test(c)) return;
+  serialInputEl.value = v + c;
+  // Fire input event so the persistOfficer wiring downstream picks it up.
+  serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function backspaceSerial() {
+  const v = serialInputEl.value;
+  if (v.length === 0) return;
+  serialInputEl.value = v.slice(0, -1);
+  serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function clearSerial() {
+  if (serialInputEl.value === '') return;
+  serialInputEl.value = '';
+  serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Wire keypad buttons.
+serialKeypadEl.querySelectorAll('.skp-key').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    if (btn.disabled) return;
+    if (btn.dataset.act === 'bksp') backspaceSerial();
+    else if (btn.dataset.act === 'clr') clearSerial();
+    else if (btn.dataset.c) appendSerialChar(btn.dataset.c);
+  });
+});
+
+// On mobile, suppress the OS keyboard entirely — the keypad is the sole input
+// path. On desktop, leave the field fully editable. We re-check on resize so
+// switching between landscape/portrait (or rotating a tablet) flips behavior.
+function applySerialMobileLockout() {
+  if (isMobileSerialContext()) {
+    serialInputEl.readOnly = true;
+    serialInputEl.classList.add('kp-managed');
+    serialInputEl.setAttribute('inputmode', 'none');
+  } else {
+    serialInputEl.readOnly = false;
+    serialInputEl.classList.remove('kp-managed');
+    serialInputEl.setAttribute('inputmode', 'text');
+  }
+}
+applySerialMobileLockout();
+window.addEventListener('resize', applySerialMobileLockout);
+
+refreshSerialKeypad();
+
+function resetWatch() {
+  // Keep officer info (name/serial/rank/current watch) since it's now sticky.
+  // Only clear bid-specific fields: notes and the 1st/2nd choice picks.
+  document.getElementById('w-notes').value = '';
+  watchState.c1 = null;
+  watchState.c2 = null;
+  paintWatchPicker();
+}
+
+/* ============================================================
+   RDO BID — multi-DP slot model
+   3 slots positioned 2-4 in the page layout.
+   Each slot: { include, view, days[28] each with state1/state2 }
+   ============================================================ */
+
+// Dynamic per-DP RDO slots. Length is 3 for normal groups, 4 for the year-end
+// (DPs 10-13) group. ensureRDOSlots resizes the array preserving any existing
+// data when possible.
+const rdoSlots = [];
+function ensureRDOSlots(n) {
+  while (rdoSlots.length < n) rdoSlots.push({ view: '1', days: [] });
+  while (rdoSlots.length > n) rdoSlots.pop();
+}
+ensureRDOSlots(3);
+
+// Holiday helpers. easterDate is unused in the dispatch holiday set (Easter is
+// not an LA City civilian paid holiday) but is preserved here for future use.
+function easterDate(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const L = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * L) / 451);
+  const month = Math.floor((h + L - 7 * m + 114) / 31);
+  const day = ((h + L - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+function nthWeekdayOfMonth(year, month, weekday, n) {
+  if (n > 0) {
+    const d = new Date(year, month, 1);
+    const offset = (weekday - d.getDay() + 7) % 7;
+    d.setDate(1 + offset + (n - 1) * 7);
+    return d;
+  } else {
+    const d = new Date(year, month + 1, 0);
+    const offset = (d.getDay() - weekday + 7) % 7;
+    d.setDate(d.getDate() - offset);
+    return d;
+  }
+}
+function getHolidaysForYear(year) {
+  const map = new Map();
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const add = (d, name, paid) => map.set(fmt(d), { name, paid });
+  // LA City civilian paid holidays (LAAC 4.119, MOU 03 + MOU 20 Article 7.5).
+  // ALL 13 are paid for dispatch classifications — no federal-only category.
+  add(new Date(year, 0, 1), "New Year's Day", true);
+  add(nthWeekdayOfMonth(year, 0, 1, 3), "MLK Jr. Day", true);
+  add(nthWeekdayOfMonth(year, 1, 1, 3), "Presidents' Day", true);
+  add(nthWeekdayOfMonth(year, 2, 1, -1), "Cesar Chavez Day", true);
+  add(nthWeekdayOfMonth(year, 4, 1, -1), "Memorial Day", true);
+  add(new Date(year, 5, 19), "Juneteenth", true);
+  add(new Date(year, 6, 4), "Independence Day", true);
+  add(nthWeekdayOfMonth(year, 8, 1, 1), "Labor Day", true);
+  add(nthWeekdayOfMonth(year, 9, 1, 2), "Indigenous Peoples Day", true);
+  add(new Date(year, 10, 11), "Veterans Day", true);
+  // Thanksgiving (Thursday) + Friday after Thanksgiving (Black Friday)
+  const thanksgiving = nthWeekdayOfMonth(year, 10, 4, 4);
+  add(thanksgiving, "Thanksgiving Day", true);
+  const dayAfter = new Date(thanksgiving);
+  dayAfter.setDate(dayAfter.getDate() + 1);
+  add(dayAfter, "Friday after Thanksgiving", true);
+  add(new Date(year, 11, 25), "Christmas Day", true);
+  return map;
+}
+const holidayCache = new Map();
+function holidayFor(d) {
+  const yr = d.getFullYear();
+  if (!holidayCache.has(yr)) holidayCache.set(yr, getHolidaysForYear(yr));
+  const key = `${yr}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return holidayCache.get(yr).get(key) || null;
+}
+
+// 2-letter codes for holidays — used on the BLANK PDF and legend.
+// Picked to avoid collisions with state codes (RDO, VC, M/L, H, JD, FL, SK).
+const HOLIDAY_CODES = [
+  ["New Year's Day",            "NY"],
+  ["MLK Jr. Day",               "MK"],
+  ["Presidents' Day",           "PR"],
+  ["Cesar Chavez Day",          "CC"],
+  ["Memorial Day",              "ME"],
+  ["Juneteenth",                "JT"],
+  ["Independence Day",          "IN"],
+  ["Labor Day",                 "LB"],
+  ["Indigenous Peoples Day",    "IP"],
+  ["Veterans Day",              "VT"],
+  ["Thanksgiving Day",          "TG"],
+  ["Friday after Thanksgiving", "FT"],
+  ["Christmas Day",             "XD"],
+];
+const HOLIDAY_CODE_BY_NAME = Object.fromEntries(HOLIDAY_CODES.map(([n,c]) => [n, c]));
+function holidayCodeFor(d) {
+  const h = holidayFor(d);
+  if (!h) return '';
+  return HOLIDAY_CODE_BY_NAME[h.name] || '';
+}
+
+/* ============================================================
+   Determining which DP each slot represents.
+   The RDO panel always uses the period set on the Watch BID page (no separate
+   selector). In full-year mode, slots 0..12 represent DPs 1..13 of the selected
+   year. Otherwise slot N represents the Nth DP within the watch bid group.
+   ============================================================ */
+
+function getRDOStartDP() {
+  if (isFullYear()) {
+    return { dp: 1, year: +wYearSel.value };
+  }
+  const [dp, yr] = wStartDP.value.split('-').map(Number);
+  return { dp, year: yr };
+}
+
+// How many DPs are in the currently-selected bid group? In full-year mode this is
+// always 13. Otherwise it's the size of the year-quarter group (3, except 4 for
+// the year-end DPs 10-13).
+function numDPsInGroup() {
+  if (isFullYear()) return 13;
+  const { dp } = getRDOStartDP();
+  const [first, last] = dpGroupForYearAndStartDP(dp);
+  return last - first + 1;
+}
+
+function getRDOSlotDP(slot) {
+  let { dp, year } = getRDOStartDP();
+  for (let i = 0; i < slot; i++) ({ dp, year } = nextDP(dp, year));
+  return getDPInfo(dp, year);
+}
+
+function nextDP(dp, yr) {
+  let d = dp + 1, y = yr;
+  if (d > 13) { d = 1; y += 1; }
+  return { dp: d, year: y };
+}
+
+// Sync the RDO slot panels whenever the watch DP changes — they always derive
+// their period from the watch bid selection.
+wStartDP.addEventListener('change', () => buildAllSlots());
+
+/* ============================================================
+   Build the per-slot RDO panels
+   ============================================================ */
+const rdoSlotsEl = document.getElementById('rdo-slots');
+
+function buildAllSlots() {
+  rdoSlotsEl.innerHTML = '';
+  const n = numDPsInGroup();
+  ensureRDOSlots(n);
+  for (let s = 0; s < n; s++) {
+    rdoSlotsEl.appendChild(buildSlotPanel(s));
+  }
+}
+
+function buildSlotPanel(slotIdx) {
+  const info = getRDOSlotDP(slotIdx);
+  const slot = rdoSlots[slotIdx];
+  // Last slot in the bid group has no DPs below it to apply to, so the Apply
+  // button is omitted entirely.
+  const isLastSlot = slotIdx === numDPsInGroup() - 1;
+
+  // Initialize day data for this slot (preserve existing if same DP)
+  const desiredFirstDate = info.start.toDateString();
+  const existingFirstDate = slot.days[0] ? slot.days[0].date.toDateString() : null;
+  if (desiredFirstDate !== existingFirstDate) {
+    slot.days = [];
+    for (let i = 0; i < 28; i++) {
+      const d = new Date(info.start);
+      d.setDate(d.getDate() + i);
+      slot.days.push({ date: d, state1: 'work', state2: 'work', holiday: holidayFor(d) });
+    }
+  }
+
+  const slotEl = document.createElement('div');
+  slotEl.className = 'rdo-slot';
+  slotEl.dataset.slot = slotIdx;
+  slotEl.innerHTML = `
+    <div class="rdo-slot-head">
+      <span class="slot-label">
+        <span class="slot-dp-num">DP ${info.dp}</span>
+        <span class="slot-dp-year">${String(info.year).split('').map(c => `<span>${c}</span>`).join('')}</span>
+      </span>
+      <div class="stat stat-view-toggle" title="Click to cycle through RDO views">
+        <div class="toggle-current">
+          <div class="toggle-label"></div>
+          <div class="toggle-count"></div>
+        </div>
+        <div class="toggle-hint"></div>
+      </div>
+      <div class="header-mou-chip" title="MOU 03/20 Paid Holiday — denoted by $ on calendar"><span class="swatch holiday">$</span><span class="mou-text">MOU 03/20<br>Paid Holiday</span></div>
+      ${isLastSlot
+        ? '<span class="apply-all-btn apply-all-spacer" aria-hidden="true">Apply to all DPs</span>'
+        : `<button type="button" class="apply-all-btn" data-slot="${slotIdx}" title="Copy this DP's selections to all DPs below it" disabled>Apply to all DPs</button>`}
+    </div>
+    <div class="rdo-slot-body">
+      <div class="calendar">
+        <div class="day-head">Sun</div>
+        <div class="day-head">Mon</div>
+        <div class="day-head">Tue</div>
+        <div class="day-head">Wed</div>
+        <div class="day-head">Thu</div>
+        <div class="day-head">Fri</div>
+        <div class="day-head">Sat</div>
+      </div>
+    </div>
+  `;
+
+  // Wire RDO counters as view targets.
+  // Single stat toggle: clicking cycles 1st → 2nd → both → 1st. The label text and
+  // class change with each click. The label says: "X/12 RDO (1st)" / "X/12 RDO (2nd)" /
+  // "X/12 + Y/12 RDO (Both)" depending on the current view.
+  const toggleEl = slotEl.querySelector('.stat-view-toggle');
+  if (toggleEl) {
+    toggleEl.addEventListener('click', () => {
+      const cur = slot.view;
+      const next = cur === '1' ? '2' : cur === '2' ? 'both' : '1';
+      slot.view = next;
+      updateStats(slotIdx);
+      applyViewClass(slotIdx);
+    });
+  }
+
+  // Initial paint
+  setTimeout(() => updateStats(slotIdx), 0);
+
+  // Build day cells
+  const calendar = slotEl.querySelector('.calendar');
+  slot.days.forEach((cd, idx) => {
+    const cell = document.createElement('div');
+    const dow = cd.date.getDay();
+    cell.className = 'day';
+    if (dow === 0 || dow === 6) cell.classList.add('weekend');
+    if (cd.holiday) {
+      cell.classList.add('is-holiday');
+      if (cd.holiday.paid) cell.classList.add('is-paid-holiday');
+    }
+    cell.dataset.idx = idx;
+    const showDollar = cd.holiday && cd.holiday.paid;
+    cell.innerHTML = `
+      <div class="layer-1"></div>
+      <div class="layer-2"></div>
+      <div class="date">${MONTHS[cd.date.getMonth()]}</div>
+      <div class="num">${cd.date.getDate()}</div>
+      <div class="mark"></div>
+      <div class="mark-1"></div>
+      <div class="mark-2"></div>
+      ${showDollar ? `<div class="holiday-mark" title="${cd.holiday.name} (paid)">$</div>` : ''}
+      ${cd.holiday ? `<div class="holiday-name" title="${cd.holiday.name}">${cd.holiday.name}</div>` : ''}
+      <div class="day-half-top" title="1st choice"></div>
+      <div class="day-half-bot" title="2nd choice"></div>
+    `;
+    // Helper: returns the choice (1 or 2) that this half-cell controls based on view.
+    const choiceForHalf = (which /* 'top' | 'bot' */) => {
+      const v = slot.view;
+      if (which === 'top') return (v === '1' || v === 'both') ? 1 : 2;
+      else return (v === '2' || v === 'both') ? 2 : 1;
+    };
+    const wireHalf = (halfEl, which) => {
+      let pressTimer = null;
+      let pressFired = false;
+      const LONG_PRESS_MS = 500;
+
+      // Click / tap → cycle (only if a long-press didn't already fire)
+      halfEl.addEventListener('click', e => {
+        e.stopPropagation();
+        if (pressFired) { pressFired = false; return; }
+        cycleDay(slotIdx, idx, choiceForHalf(which));
+      });
+
+      // Right-click on desktop → context menu
+      halfEl.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        showCtxMenu(e.clientX, e.clientY, slotIdx, idx, choiceForHalf(which));
+      });
+
+      // Touch long-press on mobile
+      halfEl.addEventListener('touchstart', e => {
+        pressFired = false;
+        const touch = e.touches[0];
+        const x = touch.clientX, y = touch.clientY;
+        pressTimer = setTimeout(() => {
+          pressFired = true;
+          showCtxMenu(x, y, slotIdx, idx, choiceForHalf(which));
+        }, LONG_PRESS_MS);
+      }, { passive: true });
+      const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+      halfEl.addEventListener('touchend', cancelPress);
+      halfEl.addEventListener('touchmove', cancelPress);
+      halfEl.addEventListener('touchcancel', cancelPress);
+    };
+    wireHalf(cell.querySelector('.day-half-top'), 'top');
+    wireHalf(cell.querySelector('.day-half-bot'), 'bot');
+    calendar.appendChild(cell);
+  });
+
+  // Wire up the "Apply to all DPs" button: copies this slot's selections to all
+  // other slots, respecting the slot's current view (1st choice / 2nd choice / both).
+  const applyAllBtn = slotEl.querySelector('.apply-all-btn');
+  if (applyAllBtn) {
+    applyAllBtn.addEventListener('click', () => {
+      // Safeguard: respect the disabled state set by updateStats() which gates
+      // execution on whether RDO counts are in a valid state (0 or 12 only).
+      if (applyAllBtn.disabled) return;
+      const sourceSlot = rdoSlots[slotIdx];
+      const view = sourceSlot.view; // '1', '2', or 'both'
+      // Snapshot the source's day-by-day states so the copy stays consistent if
+      // the user has the calendar mid-paint.
+      const sourceStates = sourceSlot.days.map(d => ({ state1: d.state1, state2: d.state2 }));
+      let copiedCount = 0;
+      // Copy ONLY to slots BELOW (DPs after) the source slot — not above. So
+      // applying from DP 8 affects DPs 9, 10, ... but never DPs 1-7.
+      for (let i = slotIdx + 1; i < rdoSlots.length; i++) {
+        const target = rdoSlots[i];
+        for (let j = 0; j < target.days.length && j < sourceStates.length; j++) {
+          if (view === '1') {
+            target.days[j].state1 = sourceStates[j].state1;
+          } else if (view === '2') {
+            target.days[j].state2 = sourceStates[j].state2;
+          } else { // 'both'
+            target.days[j].state1 = sourceStates[j].state1;
+            target.days[j].state2 = sourceStates[j].state2;
+          }
+        }
+        copiedCount++;
+      }
+      // Refresh all slot UIs to reflect the new state.
+      rdoSlots.forEach((_, i) => {
+        rdoSlots[i].days.forEach((_, j) => refreshDayCell(i, j));
+        updateStats(i);
+      });
+      const label = view === '1' ? '1st choice' : view === '2' ? '2nd choice' : 'both choices';
+      toast(`Applied DP ${getRDOSlotDP(slotIdx).dp} ${label} to ${copiedCount} subsequent DP${copiedCount === 1 ? '' : 's'}`);
+    });
+  }
+
+  // Apply view class & paint after a microtask so the element exists in DOM
+  setTimeout(() => {
+    applyViewClass(slotIdx);
+    updateStats(slotIdx);
+  }, 0);
+
+  return slotEl;
+}
+
+/* ============================================================
+   DAY STATE DEFINITIONS
+   Each calendar half-cell holds one of these states.
+   Tap cycles through the 3 primary states (work → rdo → vac → work).
+   Long-press / right-click opens the context menu for the 5 less-common ones.
+   ============================================================ */
+const STATE_DEFS = [
+  // code,  ui label, pdf symbol, full name,           css fill class
+  ['work', '',       '',         'Clear',              null],
+  ['rdo',  'RDO',    'O',        'Regular Day Off',    'fill-rdo'],
+  ['vac',  'VC',     'V',        'Vacation',           'fill-vac'],
+  ['t',    'T',      'T',        'Training',           'fill-other'],
+  ['ml',   'M/L',    'M/L',      'Military Leave',     'fill-other'],
+  ['h',    'H',      'H',        'Holiday',            'fill-other'],
+  ['jd',   'JD',     'JD',       'Jury Duty',          'fill-other'],
+  ['fl',   'FL',     'FL',       'Family Leave',       'fill-other'],
+  ['sk',   'SK',     'SK',       'Sick',               'fill-other'],
+];
+const STATE_BY_CODE = Object.fromEntries(STATE_DEFS.map(s => [s[0], { label: s[1], pdfSym: s[2], name: s[3], fill: s[4] }]));
+function stateLabel(code) { return STATE_BY_CODE[code]?.label || ''; }
+function statePdfSym(code) { return STATE_BY_CODE[code]?.pdfSym || ''; }
+function stateFill(code) { return STATE_BY_CODE[code]?.fill || null; }
+
+// Context menu: codes shown when long-pressing / right-clicking a half-cell.
+// T (Training) at top, then M/L, etc.; "Clear" at bottom resets to work.
+const CTX_MENU_CODES = ['t', 'ml', 'h', 'jd', 'fl', 'sk', 'work'];
+
+function cycleDay(slotIdx, idx, choice) {
+  const cd = rdoSlots[slotIdx].days[idx];
+  const key = (choice === 1) ? 'state1' : 'state2';
+  const cur = cd[key];
+  // If cell is in an "other" state (ml/h/jd/fl/sk), tap clears back to work.
+  // Otherwise cycle work → rdo → vac → work.
+  if (cur === 'work') cd[key] = 'rdo';
+  else if (cur === 'rdo') cd[key] = 'vac';
+  else if (cur === 'vac') cd[key] = 'work';
+  else cd[key] = 'work'; // any "other" state → clear
+  refreshDayCell(slotIdx, idx);
+  updateStats(slotIdx);
+}
+
+function setDayState(slotIdx, idx, choice, newState) {
+  const cd = rdoSlots[slotIdx].days[idx];
+  const key = (choice === 1) ? 'state1' : 'state2';
+  cd[key] = newState;
+  refreshDayCell(slotIdx, idx);
+  updateStats(slotIdx);
+}
+
+/* Single shared context menu instance; positioned per click */
+let ctxMenuEl = null;
+function ensureCtxMenu() {
+  if (ctxMenuEl) return ctxMenuEl;
+  ctxMenuEl = document.createElement('div');
+  ctxMenuEl.className = 'ctx-menu hidden';
+  document.body.appendChild(ctxMenuEl);
+  document.addEventListener('click', e => {
+    if (ctxMenuEl && !ctxMenuEl.contains(e.target)) hideCtxMenu();
+  });
+  return ctxMenuEl;
+}
+function hideCtxMenu() {
+  if (ctxMenuEl) ctxMenuEl.classList.add('hidden');
+}
+function showCtxMenu(x, y, slotIdx, idx, choice) {
+  const menu = ensureCtxMenu();
+  menu.innerHTML = '';
+  CTX_MENU_CODES.forEach(code => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ctx-item' + (code === 'work' ? ' ctx-clear' : '');
+    const def = STATE_BY_CODE[code];
+    item.innerHTML = `<span class="ctx-label">${def.label || '—'}</span><span class="ctx-name">${def.name}</span>`;
+    item.addEventListener('click', e => {
+      e.stopPropagation();
+      setDayState(slotIdx, idx, choice, code);
+      hideCtxMenu();
+    });
+    menu.appendChild(item);
+  });
+  // Position; clamp to viewport
+  menu.classList.remove('hidden');
+  const rect = menu.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let nx = x, ny = y;
+  if (nx + rect.width > vw - 4) nx = vw - rect.width - 4;
+  if (ny + rect.height > vh - 4) ny = vh - rect.height - 4;
+  if (nx < 4) nx = 4;
+  if (ny < 4) ny = 4;
+  menu.style.left = nx + 'px';
+  menu.style.top = ny + 'px';
+}
+
+function refreshDayCell(slotIdx, idx) {
+  const slotEl = rdoSlotsEl.querySelector(`.rdo-slot[data-slot="${slotIdx}"]`);
+  if (!slotEl) return;
+  const cell = slotEl.querySelector(`.day[data-idx="${idx}"]`);
+  if (!cell) return;
+  const cd = rdoSlots[slotIdx].days[idx];
+
+  // Reset all per-state classes
+  cell.classList.remove(
+    's1-rdo','s1-vac','s1-other',
+    's2-rdo','s2-vac','s2-other'
+  );
+  // State1 class
+  if (cd.state1 === 'rdo') cell.classList.add('s1-rdo');
+  else if (cd.state1 === 'vac') cell.classList.add('s1-vac');
+  else if (cd.state1 !== 'work') cell.classList.add('s1-other');
+  // State2 class
+  if (cd.state2 === 'rdo') cell.classList.add('s2-rdo');
+  else if (cd.state2 === 'vac') cell.classList.add('s2-vac');
+  else if (cd.state2 !== 'work') cell.classList.add('s2-other');
+
+  // Layer fill classes
+  const l1 = cell.querySelector('.layer-1');
+  l1.className = 'layer-1';
+  const l1Fill = stateFill(cd.state1);
+  if (l1Fill) l1.classList.add(l1Fill);
+  const l2 = cell.querySelector('.layer-2');
+  l2.className = 'layer-2';
+  const l2Fill = stateFill(cd.state2);
+  if (l2Fill) l2.classList.add(l2Fill);
+
+  const v = rdoSlots[slotIdx].view;
+  cell.querySelector('.mark').textContent =
+    v === '1' ? stateLabel(cd.state1) :
+    v === '2' ? stateLabel(cd.state2) : '';
+  cell.querySelector('.mark-1').textContent = stateLabel(cd.state1);
+  cell.querySelector('.mark-2').textContent = stateLabel(cd.state2);
+
+  const num = cell.querySelector('.num');
+  const date = cell.querySelector('.date');
+  // Date and day number live in the TOP half of the cell. Only color them white when the
+  // top half actually has a fill (state1 set). If only state2 is set, the top half is still
+  // unfilled white/parchment, so keep the text dark for visibility.
+  const topFilled = cd.state1 !== 'work';
+  num.classList.toggle('has-fill', topFilled);
+  date.classList.toggle('has-fill', topFilled);
+}
+
+function applyViewClass(slotIdx) {
+  const slotEl = rdoSlotsEl.querySelector(`.rdo-slot[data-slot="${slotIdx}"]`);
+  if (!slotEl) return;
+  const v = rdoSlots[slotIdx].view;
+  slotEl.querySelectorAll('.day').forEach(cell => {
+    cell.classList.remove('v-1', 'v-2', 'v-both');
+    if (v === '1') cell.classList.add('v-1');
+    else if (v === '2') cell.classList.add('v-2');
+    else cell.classList.add('v-both');
+  });
+  rdoSlots[slotIdx].days.forEach((_, i) => refreshDayCell(slotIdx, i));
+}
+
+function updateStats(slotIdx) {
+  const slotEl = rdoSlotsEl.querySelector(`.rdo-slot[data-slot="${slotIdx}"]`);
+  if (!slotEl) return;
+  const slot = rdoSlots[slotIdx];
+  const days = slot.days;
+  const o1 = days.filter(d => d.state1 === 'rdo').length;
+  const o2 = days.filter(d => d.state2 === 'rdo').length;
+  const view = slot.view;
+
+  const toggle = slotEl.querySelector('.stat-view-toggle');
+  if (!toggle) return;
+  const labelEl = toggle.querySelector('.toggle-label');
+  const countEl = toggle.querySelector('.toggle-count');
+  const hintEl = toggle.querySelector('.toggle-hint');
+
+  // Style accents reflect the active view.
+  toggle.classList.remove('warn', 'ok', 'view-1', 'view-2', 'view-both');
+
+  // The "Choice" word always appears as a 2-line block: ordinal on top, "Choice"
+  // below, both centered. Renders as an inline-block so it can sit inline with
+  // surrounding text (e.g. "Click for [block]" or "X of 12 RDOs selected [block]")
+  // and still occupy 2 lines.
+  const block1 = '<span class="choice-block">1<sup>st</sup><br>Choice</span>';
+  const block2 = '<span class="choice-block">2<sup>nd</sup><br>Choice</span>';
+  const blockBoth = '<span class="choice-block">1<sup>st</sup> &amp; 2<sup>nd</sup><br>Choice</span>';
+
+  if (view === '1') {
+    labelEl.innerHTML = block1;
+    countEl.innerHTML = `${o1} of 12 RDOs selected`;
+    hintEl.innerHTML = `Click for ${block2}`;
+    toggle.classList.add('view-1');
+    toggle.classList.toggle('warn', o1 !== 0 && o1 !== 12);
+    toggle.classList.toggle('ok', o1 === 12);
+  } else if (view === '2') {
+    labelEl.innerHTML = block2;
+    countEl.innerHTML = `${o2} of 12 RDOs selected`;
+    hintEl.innerHTML = `Click for ${blockBoth}`;
+    toggle.classList.add('view-2');
+    toggle.classList.toggle('warn', o2 !== 0 && o2 !== 12);
+    toggle.classList.toggle('ok', o2 === 12);
+  } else {
+    labelEl.innerHTML = blockBoth;
+    countEl.innerHTML =
+      `${o1} of 12 RDOs (1<sup>st</sup>)<br>` +
+      `${o2} of 12 RDOs (2<sup>nd</sup>)`;
+    hintEl.innerHTML = `Click for ${block1}`;
+    toggle.classList.add('view-both');
+    const allOk = o1 === 12 && o2 === 12;
+    const anyWarn = (o1 !== 0 && o1 !== 12) || (o2 !== 0 && o2 !== 12);
+    toggle.classList.toggle('ok', allOk);
+    toggle.classList.toggle('warn', anyWarn);
+  }
+
+  // Apply-to-all gating: only allow the button when this slot's RDO counts are
+  // in a "valid" state — exactly 0 or 12 in each of 1st/2nd choice. Anything in
+  // between (e.g. 7 RDOs in 1st) is mid-edit and shouldn't be propagated.
+  const applyBtn = slotEl.querySelector('.apply-all-btn');
+  if (applyBtn) {
+    const valid = (o1 === 0 || o1 === 12) && (o2 === 0 || o2 === 12);
+    applyBtn.disabled = !valid;
+    applyBtn.title = valid
+      ? "Copy this DP's selections to all DPs below it"
+      : 'Set RDO counts to 0 or 12 in each choice before applying to other DPs';
+  }
+}
+
+function resetRDO() {
+  rdoSlots.forEach(slot => {
+    slot.days.forEach(d => { d.state1 = 'work'; d.state2 = 'work'; });
+  });
+  rdoSlots.forEach((_, i) => {
+    rdoSlots[i].days.forEach((_, j) => refreshDayCell(i, j));
+    updateStats(i);
+  });
+  toast('All RDO days cleared');
+}
+
+buildAllSlots();
+
+/* ============================================================
+   PERSIST OFFICER INFO ACROSS SESSIONS
+   Saves to localStorage so the form repopulates on next visit.
+   Synced fields: name, currentWatch, serial, rank
+   ============================================================ */
+const OFFICER_STORAGE_KEY = 'lawa-dispatch-bid-officer-v1';
+
+function readOfficer() {
+  try {
+    const raw = localStorage.getItem(OFFICER_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeOfficer(patch) {
+  try {
+    const cur = readOfficer() || {};
+    const merged = { ...cur, ...patch };
+    localStorage.setItem(OFFICER_STORAGE_KEY, JSON.stringify(merged));
+  } catch (e) {
+    // localStorage may be unavailable (private browsing); silently fail
+  }
+}
+
+// Apply saved officer info to all relevant fields
+function applyOfficerToFields() {
+  const data = readOfficer();
+  if (!data) return;
+  const setIfEmpty = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val == null || val === '') return;
+    if (el.tagName === 'SELECT') {
+      // Only set if value is a valid option
+      const has = Array.from(el.options).some(o => o.value === val);
+      if (has) el.value = val;
+    } else {
+      el.value = val;
+    }
+  };
+  // Watch form (the source of truth for officer info)
+  setIfEmpty('w-name', data.name);
+  setIfEmpty('w-curwatch', data.currentWatch);
+  setIfEmpty('w-serial', data.serial);
+  setIfEmpty('w-rank', data.rank);
+}
+
+// Pull current values from the watch fields and reflect them in the read-only
+// display row on the RDO page.
+function syncRDODisplay() {
+  const name = document.getElementById('w-name').value.trim();
+  const serial = document.getElementById('w-serial').value.trim().toUpperCase();
+  const watch = document.getElementById('w-curwatch').value;
+  const rank = document.getElementById('w-rank').value;
+  const rankEl = document.getElementById('r-rank-display');
+  const nameEl = document.getElementById('r-name-display');
+  const serialEl = document.getElementById('r-serial-display');
+  const watchEl = document.getElementById('r-watch-display');
+  // Compact label for display — full classification names are long enough to
+  // wrap awkwardly in the read-only chip.
+  const rankShort =
+    rank === 'Principal Communications Operator' ? 'Pr. Comm Op' :
+    rank === 'Senior Communications Operator'    ? 'Sr. Comm Op' :
+    rank === 'Communications Information Representative' ? 'CIR' :
+                                                   rank || '—';
+  if (rankEl)   rankEl.textContent = rankShort;
+  if (nameEl)   nameEl.textContent = name || '—';
+  if (serialEl) serialEl.textContent = serial ? `#${serial}` : '—';
+  if (watchEl)  watchEl.textContent = watch ? `Watch ${watch}` : '—';
+}
+
+// Wire up listeners on the watch fields: persist to localStorage and refresh
+// the RDO read-only display row.
+function wireOfficerSync() {
+  const fields = [
+    ['w-name', 'name'],
+    ['w-serial', 'serial'],
+    ['w-curwatch', 'currentWatch'],
+    ['w-rank', 'rank'],
+  ];
+  fields.forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const handler = () => {
+      writeOfficer({ [key]: el.value });
+      syncRDODisplay();
+    };
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+}
+
+applyOfficerToFields();
+wireOfficerSync();
+syncRDODisplay();
+// Keypad state needs an explicit refresh after applyOfficerToFields restores
+// any saved serial — programmatic .value sets don't fire the input handler.
+refreshSerialKeypad();
+
+function forgetOfficer() {
+  if (!confirm('Clear saved name, serial, classification, and watch from this device?')) return;
+  try { localStorage.removeItem(OFFICER_STORAGE_KEY); } catch (e) {}
+  ['w-name','w-serial','w-curwatch','w-rank'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.tagName === 'SELECT') {
+      const empty = Array.from(el.options).find(o => o.value === '');
+      if (empty) el.value = '';
+      else if (id === 'w-rank') el.value = 'Communications Information Representative';
+      else el.value = el.options[0].value;
+    } else {
+      el.value = '';
+    }
+  });
+  refreshSerialKeypad();
+  toast('Saved dispatcher info cleared');
+  syncRDODisplay();
+}
+const toastEl = document.getElementById('toast');
+function toast(msg, isError) {
+  toastEl.textContent = msg;
+  toastEl.classList.toggle('error', !!isError);
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 3200);
+}
+
+/* ============================================================
+   PDF GENERATION — APD Form 086
+   Faithful black-and-white reproduction of the official form.
+   Layout (portrait letter, 612 × 792 pt):
+     - Title block: "LOS ANGELES AIRPORT POLICE" / "WATCH/DAYS-OFF BID REQUEST"
+     - Officer info row: LAST NAME/SERIAL | WATCH | DP#(s) | DP START | DP END
+     - Subtitle line: "MARK FIRST AND SECOND CHOICE OF WATCH ASSIGNMENT OR DAYS OFF"
+     - Choice row: 1ST CHOICE | 2ND CHOICE | SUPERVISOR'S INITIALS | DATE RECEIVED
+     - Day grid: SU M TU W TH F SA × 4 column headers (= 28 cols)
+                 Date row(s) — one per DP (3 for watch, 1 for RDO)
+                 Mark row(s) — same count as date rows
+     - Footer: APD FORM 086 (left) | Symbols legend (right)
+   ============================================================ */
+const { jsPDF } = window.jspdf;
+
+// ------- shared layout constants --------
+const PG_W = 612;
+const PG_H = 792;
+const PAGE_MARGIN = 18;
+const BORDER_GRAY = 90;     // line color for table borders
+const FAINT_FILL = 220;     // weekend column shading on PDF — slightly darker for visibility
+const WATERMARK_GRAY = 211; // text watermark color (WATCH BID letters, holiday codes) —
+                            // slightly darker than FAINT_FILL so the letters read while
+                            // still feeling like a faint background mark.
+
+
+// ----------------- COMBINED APD-086 PDF -----------------
+// One portrait page with 4 stacked APD-086 forms:
+//   1) Watch BID (3-DP combined, 1st/2nd watch choice in top boxes)
+//   2) 1st DP (single 28-day grid, marks from rdoSlots[0])
+//   3) 2nd DP (single 28-day grid, marks from rdoSlots[1])
+//   4) 3rd DP (single 28-day grid, marks from rdoSlots[2])
+// Both the Watch and RDO buttons call this same function.
+
+function generateCombinedPDF() {
+  const name = document.getElementById('w-name').value.trim();
+  const serial = document.getElementById('w-serial').value.trim().toUpperCase();
+  const curWatch = document.getElementById('w-curwatch').value || '';
+  const rank = document.getElementById('w-rank').value || 'Communications Information Representative';
+  // Short label used in filenames and the "Last name, ABBR" prefix on slips.
+  // Each dispatch classification gets a compact 2-3 letter abbreviation.
+  const rankAbbr =
+    rank === 'Principal Communications Operator' ? 'Pr. CO' :
+    rank === 'Senior Communications Operator'    ? 'Sr. CO' :
+                                                   'CIR';
+  const nameWithRank = `${rankAbbr} ${name}`;
+
+  if (!name) return toast('Dispatcher name required', true);
+  if (!serial) return toast('Serial number required', true);
+  if (!SERIAL_PATTERN.test(serial)) return toast('Serial must be 1 letter (A–F) + 4 digits', true);
+
+  const numDPs = numDPsInGroup();
+
+  // Validate selections.
+  // 1st choice is required when a DP has any selections — must be exactly 12 RDOs.
+  // 2nd choice is OPTIONAL — only validate if the user entered any 2nd-choice marks.
+  for (let s = 0; s < numDPs; s++) {
+    const slot = rdoSlots[s];
+    const has1 = slot.days.some(d => d.state1 !== 'work');
+    const has2 = slot.days.some(d => d.state2 !== 'work');
+    if (!has1 && !has2) continue;
+    if (has1) {
+      const o1 = slot.days.filter(d => d.state1 === 'rdo').length;
+      if (o1 !== 12) return toast(`DP ${getRDOSlotDP(s).dp}: 1st choice needs 12 RDOs (has ${o1})`, true);
+    }
+    if (has2) {
+      const o2 = slot.days.filter(d => d.state2 === 'rdo').length;
+      if (o2 !== 12) return toast(`DP ${getRDOSlotDP(s).dp}: 2nd choice needs 12 RDOs (has ${o2})`, true);
+    }
+  }
+
+  // Determine the DPs in the selected group (single mode) or full year (fullYear mode).
+  let dpStart, yrStart;
+  if (isFullYear()) {
+    dpStart = 1;
+    yrStart = +wYearSel.value;
+  } else {
+    [dpStart, yrStart] = wStartDP.value.split('-').map(Number);
+  }
+  const dps = [];
+  for (let i = 0; i < numDPs; i++) {
+    let curDP = dpStart + i;
+    let curYr = yrStart;
+    if (curDP > 13) { curDP -= 13; curYr += 1; }
+    dps.push(getDPInfo(curDP, curYr));
+  }
+
+  // Watch choices: in single mode, one pair {c1, c2}. In fullYear mode, four pairs
+  // (one per group: 1-3, 4-6, 7-9, 10-13). For email subject and "hasWatchBid" we
+  // collapse fullYear to a "did the officer set ANY watch picks?" question.
+  let watch1, watch2, hasWatchBid;
+  if (isFullYear()) {
+    hasWatchBid = watchStateGroups.some(g => g.c1 != null || g.c2 != null);
+    // Composite labels reflecting all four group picks (used only as a fallback;
+    // the per-slip rendering in full-year mode draws each group's choices directly).
+    watch1 = watchStateGroups.map(g => g.c1 != null ? `W${g.c1}` : '—').join('/');
+    watch2 = watchStateGroups.map(g => g.c2 != null ? `W${g.c2}` : '—').join('/');
+  } else {
+    watch1 = watchState.c1 != null ? `Watch ${watchState.c1}` : '';
+    watch2 = watchState.c2 != null ? `Watch ${watchState.c2}` : '';
+    hasWatchBid = watch1 !== '' || watch2 !== '';
+  }
+  const symFor = (s) => statePdfSym(s);
+
+  // Determine which forms to render.
+  //  - Watch BID slip prints only if at least one watch choice (1st or 2nd) is set.
+  //  - DPs are included only if they have any RDO/VC selections.
+  const includedDPs = []; // array of slot indices
+  for (let s = 0; s < numDPs; s++) {
+    const slot = rdoSlots[s];
+    if (slot.days.some(d => d.state1 !== 'work' || d.state2 !== 'work')) {
+      includedDPs.push(s);
+    }
+  }
+
+  // Edge case: if nothing is selected, still generate a (mostly empty) PDF and skip
+  // the email/share flow entirely. Just download the file. The flag below tells the
+  // share routine downstream to bypass email prep.
+  const isEmptyBid = !hasWatchBid && includedDPs.length === 0;
+
+  const doc = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+
+  // Per-slip heights — sized just tall enough for content + legend without leaving
+  // empty space below.
+  // Per-slip heights. Both Watch BID and RDO slips now have 4 cell rows, so they
+  // share an identical 173pt height — symmetric layout, equal bottom-border spacing.
+  const FORM_H_WATCH = 173;
+  const FORM_H_RDO = 173;
+
+  // Helper: pad mark rows to a target count. Original APD-086:
+  //   Watch BID slip = 3 date rows + 1 mark row (the W·A·T·C·H_B·I·D label) = 4 cell rows
+  //   RDO slip       = 1 date row + 4 mark rows                             = 5 cell rows
+  const padMarks = (markRows, targetCount) => {
+    const out = markRows.slice(0, targetCount);
+    while (out.length < targetCount) out.push(new Array(28).fill(''));
+    return out;
+  };
+
+  // Mark row spells out "WATCH BID" with one letter per cell, exactly as on the sample form.
+  // Letters at cell indices: 8=W, 9=A, 10=T, 11=C, 12=H, gap at 13-14, 15=B, 16=I, 17=D
+  // (BID shifted right by 1 cell so the 'B' falls on Monday, not the shaded Sunday column).
+  const watchBidLabelRow = new Array(28).fill('');
+  ['W','A','T','C','H'].forEach((ch, i) => watchBidLabelRow[8 + i] = ch);
+  ['B','I','D'].forEach((ch, i) => watchBidLabelRow[15 + i] = ch);
+
+  // Build the slip list with page-break support. Each slip records its y, h, and
+  // page so the cut-here lines and per-page holiday legend can be placed correctly.
+  // Page break: if the next slip would extend below the page bottom, we addPage()
+  // and reset cy to the top margin.
+  // Two-pass layout: pass 1 defers drawing and just records {h, page, drawFn} for
+  // each slip. Pass 2 assigns final Y positions (tight stacking with a small gap
+  // between slips for the per-slip holiday legend + cut-here line) and runs the
+  // drawFns.
+  const slips = []; // { y, h, page, drawFn }
+  const pageTopY = (PAGE_MARGIN + 4) / 2; // halved — slips start closer to the top edge
+  // Reserve bottom space for the trailing legend on the last slip of a page (~10pt).
+  const reservedBottom = 10;
+  // Vertical gap between adjacent slips on the same page. Hosts the per-slip
+  // holiday legend (~8.5pt baseline below slip) and the cut-here line, plus a
+  // few pt of breathing room before the next slip starts.
+  // SLIP_GAP: gap between adjacent slips. Holds the per-slip holiday legend
+  // (~9pt below slip border) and the cut-here line (~16pt below).
+  const SLIP_GAP = 22;
+  // Total slot height = slip + gap. Used to compute the fixed Y schedule.
+  const SLOT_PITCH = FORM_H_WATCH + SLIP_GAP; // FORM_H_WATCH === FORM_H_RDO === 173
+  // How many slots fit on a page given our top margin and reserved bottom?
+  const MAX_SLOTS_PER_PAGE = Math.floor((PG_H - reservedBottom - pageTopY + SLIP_GAP) / SLOT_PITCH);
+
+  let cy = pageTopY;
+  let pageIdx = 0;
+  // Per-page slot counter. Each new page starts at slot 0; slips advance the
+  // counter as they're added. There is no special "reserve slot 0 for Watch BID"
+  // behavior — if no Watch BID is bid, the first RDO slip simply takes slot 0.
+  let pageSlotIdx = 0;
+
+  const addSlip = (h, drawFn, forceNewPage) => {
+    if (forceNewPage && slips.length > 0) {
+      pageIdx += 1;
+      pageSlotIdx = 0;
+      cy = pageTopY;
+    } else if (cy + h > PG_H - reservedBottom) {
+      pageIdx += 1;
+      pageSlotIdx = 0;
+      cy = pageTopY;
+    }
+    // Don't draw yet — pass 2 assigns the final Y based on pageSlotIdx and a
+    // fixed position schedule (so removing slips doesn't reflow earlier ones).
+    slips.push({ y: cy, h, page: pageIdx, drawFn, pageSlotIdx });
+    pageSlotIdx += 1;
+    cy += h + SLIP_GAP;
+  };
+
+  // Helper: build a Watch BID slip for a specific group of DPs. Used both for the
+  // single-period Watch BID slip and for each of the 4 mini-slips on a full-year
+  // Watch BID page.
+  const drawWatchBidSlip = (slipY, slipH, groupDPs, choice1, choice2) => {
+    const allDateRows = groupDPs.map(info => {
+      const arr = [];
+      for (let i = 0; i < 28; i++) {
+        const d = new Date(info.start);
+        d.setDate(d.getDate() + i);
+        arr.push(d);
+      }
+      return arr;
+    });
+    // Layout differs by group size:
+    //  • 3-DP groups: 3 date rows + 1 dedicated label row (4 total rows). Label
+    //    row letters render in light gray.
+    //  • 4-DP groups: 3 date rows + 1 hybrid row (DP4 dates merged with the
+    //    WATCH BID label letters). Total still 4 rows.
+    let dateRows, dateRowLabels, markRows, shadedMarkRowIdxs;
+    if (groupDPs.length === 4) {
+      dateRows = allDateRows;
+      dateRowLabels = [null, null, null, watchBidLabelRow];
+      markRows = padMarks([], 0);
+      shadedMarkRowIdxs = null;
+    } else {
+      dateRows = allDateRows;
+      dateRowLabels = null;
+      markRows = padMarks([ watchBidLabelRow ], 1);
+      shadedMarkRowIdxs = [0];
+    }
+    drawAPD086(doc, slipY, slipH, {
+      name: nameWithRank, serial, curWatch,
+      dpHeader: 'DP#s',
+      dpRange: `${groupDPs[0].dp} - ${groupDPs[groupDPs.length - 1].dp}`,
+      startDate: fmtMDDYYYY(groupDPs[0].start),
+      endDate: fmtMDDYYYY(groupDPs[groupDPs.length - 1].end),
+      firstChoice: choice1,
+      secondChoice: choice2,
+      dateRows,
+      dateRowLabels,
+      showLegend: true,
+      markRows,
+      shadedMarkRowIdxs
+    });
+  };
+
+  if (isFullYear()) {
+    // FULL-YEAR MODE: page 1 has 4 Watch BID mini-slips (one per DP group).
+    // RDO pages: each DP gets its own page.
+    if (hasWatchBid || isEmptyBid) {
+      // Group DPs into the four year-quarter groups: 1-3, 4-6, 7-9, 10-13.
+      const groupRanges = [[1, 3], [4, 6], [7, 9], [10, 13]];
+      groupRanges.forEach((range, groupIdx) => {
+        const [first, last] = range;
+        const groupDPs = dps.filter(info => info.dp >= first && info.dp <= last);
+        const gState = watchStateGroups[groupIdx];
+        const c1 = gState.c1 != null ? `Watch ${gState.c1}` : '';
+        const c2 = gState.c2 != null ? `Watch ${gState.c2}` : '';
+        addSlip(FORM_H_WATCH, (slipY) => {
+          drawWatchBidSlip(slipY, FORM_H_WATCH, groupDPs, c1, c2);
+        }, false, true);
+      });
+    }
+  } else {
+    // SINGLE-PERIOD MODE: one Watch BID slip covering all DPs in the chosen group.
+    if (hasWatchBid || isEmptyBid) {
+      addSlip(FORM_H_WATCH, (slipY) => {
+        drawWatchBidSlip(slipY, FORM_H_WATCH, dps, watch1, watch2);
+      }, false, true);
+    }
+  }
+
+  // RDO slips: included DPs, OR all DPs in empty-bid hand-fill mode.
+  // RDO forms: 1st/2nd CHOICE boxes left blank — they are only used on the Watch BID.
+  // In full-year mode, force a page break before each RDO slip (one DP per page).
+  const dpIndicesToPrint = isEmptyBid
+    ? Array.from({ length: numDPs }, (_, i) => i)
+    : includedDPs;
+  dpIndicesToPrint.forEach((slotIdx, idxInList) => {
+    const slot = rdoSlots[slotIdx];
+    const info = dps[slotIdx];
+    // In full-year mode with selections, each RDO slip starts on its own page so
+    // the officer's marks are easy to read. For a BLANK full-year PDF (hand-fill
+    // mode), pack RDO slips 4 per page instead — the natural page-break check
+    // will handle pagination based on the fixed slot schedule.
+    // The first full-year RDO slip after the Watch BID page always forces a new
+    // page so RDOs don't share a page with the Watch BID mini-slips.
+    const isFirstRdoAfterWatch = isFullYear() && idxInList === 0 && slips.length > 0;
+    const forceNewPage = isFirstRdoAfterWatch || (isFullYear() && !isEmptyBid && slips.length > 0);
+    addSlip(FORM_H_RDO, (slipY) => {
+      drawAPD086(doc, slipY, FORM_H_RDO, {
+        name: nameWithRank, serial, curWatch,
+        dpHeader: 'DP#',
+        dpRange: String(info.dp),
+        startDate: fmtMDDYYYY(info.start),
+        endDate: fmtMDDYYYY(info.end),
+        firstChoice: '',
+        secondChoice: '',
+        dateRows: [ slot.days.map(d => d.date) ],
+        // Per-slip mini legend at the bottom — RDO slips only (Watch BID slip omits it).
+        showLegend: true,
+        // Row 2 (0-indexed) carries holiday markers — drawn in gray, not black.
+        holidayRowIdxs: [2],
+        // Stash the slot index so we can correlate slips back to DPs for the
+        // per-page holiday legend below.
+        _slotIdx: slotIdx,
+        // Dollar-sign watermark — placed on the state2 mark row (one row above
+        // the holiday-code row). NOT placed on state1, so each paid holiday day
+        // shows exactly one "$" on the slip. Rendered FIRST so any O/V/etc. mark
+        // in state2 stamps on top of the $.
+        dollarRows: (() => {
+          const dr = [null, null, null];
+          const paidFlags = slot.days.map(d => {
+            const h = holidayFor(d.date);
+            return h && h.paid ? '$' : '';
+          });
+          dr[1] = paidFlags;
+          return dr;
+        })(),
+        markRows: (() => {
+          const rows = [ slot.days.map(d => symFor(d.state1)) ];
+          const has2 = slot.days.some(d => d.state2 !== 'work');
+          if (has2) rows.push(slot.days.map(d => symFor(d.state2)));
+          const padded = padMarks(rows, 3);
+          // Holiday markers — applied to EVERY RDO slip (real bids and BLANK alike).
+          // Row 3 (the bottom row of marks) gets a 2-letter code for any holiday in
+          // that column. State1/state2 marks live on rows 1-2, with $ as a watermark
+          // behind them on paid MOU holiday days (see dollarRows above).
+          padded[2] = slot.days.map(d => holidayCodeFor(d.date));
+          return padded;
+        })()
+      });
+    }, forceNewPage);
+    // Tag the just-added slip with which DP slot it represents.
+    slips[slips.length - 1].slotIdx = slotIdx;
+  });
+
+  // Determine which DPs have RDO selections (used for filename, email routing,
+  // and the per-page disclaimer printed below the slips).
+  const rdoDPs = [];
+  rdoSlots.forEach((slot, idx) => {
+    if (slot.days.some(d => d.state1 !== 'work' || d.state2 !== 'work')) {
+      rdoDPs.push({ dp: dps[idx].dp, year: dps[idx].year });
+    }
+  });
+  const hasAnyRDO = rdoDPs.length > 0;
+
+  // Build recipient list. Dispatch sends every bid (Watch + RDO) to a single
+  // mailbox — no per-watch routing, no separate vacation address.
+  const recipients = ['APDCommunicationPrincipals@lawa.org'];
+
+  // ---- Pass 2: fixed-position layout. Each slip's Y is determined by its
+  // pageSlotIdx according to the schedule pageTopY + pageSlotIdx * SLOT_PITCH.
+  // This means removing or omitting slips does NOT reflow the others — slot 1's
+  // Y position is the same whether or not slot 0 is present. The bandBottom
+  // (cut-here line position) is the start of the NEXT slot, regardless of
+  // whether that next slot is occupied.
+  if (slips.length > 0) {
+    const byPage = {};
+    slips.forEach(s => { (byPage[s.page] = byPage[s.page] || []).push(s); });
+    const pages = Object.keys(byPage).map(Number).sort((a, b) => a - b);
+    pages.forEach((pageNum, ordinal) => {
+      if (ordinal > 0) doc.addPage();
+      const pageSlips = byPage[pageNum];
+      // Sort by pageSlotIdx so the cut-here positioning is computed in slot order.
+      pageSlips.sort((a, b) => a.pageSlotIdx - b.pageSlotIdx);
+      // Identify the largest slot used on this page; cut-here lines are drawn
+      // BETWEEN slips that exist (i.e. only between adjacent occupied slots).
+      pageSlips.forEach((s, i) => {
+        s.y = pageTopY + s.pageSlotIdx * SLOT_PITCH;
+        // bandBottom = the cut-here Y position. It sits ~16pt below this slip's
+        // bottom border, which lines up with the start-of-next-slot minus a small
+        // breathing room (SLOT_PITCH - 16 = 6pt above the next slot's top edge).
+        // Only draw a cut-here below this slip if there's another slip following.
+        const next = pageSlips[i + 1];
+        s.bandBottom = next ? s.y + s.h + 16 : null;
+        s.drawFn(s.y);
+      });
+    });
+  }
+
+  // Dashed "cut here" line at each slip boundary (between adjacent slips on the
+  // SAME page only — never across page breaks). The line falls at the band
+  // boundary, BELOW the per-slip holiday legend (which lives in the lower portion
+  // of each band, just below the slip's outer bottom border).
+  for (let i = 0; i < slips.length - 1; i++) {
+    if (slips[i].page !== slips[i + 1].page) continue;
+    doc.setPage(slips[i].page + 1); // jsPDF pages are 1-indexed
+    const lineY = slips[i].bandBottom != null
+      ? slips[i].bandBottom
+      : slips[i].y + slips[i].h;
+    doc.setLineDashPattern([3, 3], 0);
+    doc.setDrawColor(140, 140, 140);
+    doc.setLineWidth(0.5);
+    doc.line(PAGE_MARGIN + 6, lineY, PG_W - PAGE_MARGIN - 6, lineY);
+    doc.setLineDashPattern([], 0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    const labelText = '✂  cut here';
+    const labelW = doc.getTextWidth(labelText) + 8;
+    doc.setFillColor(255, 255, 255);
+    doc.rect((PG_W - labelW) / 2, lineY - 4, labelW, 8, 'F');
+    doc.text(labelText, PG_W / 2, lineY + 2, { align: 'center' });
+  }
+
+  // Per-slip holiday legend — each slip with holidays in its 28-day window gets its
+  // own mini-legend rendered just below the slip's outer bottom border (4pt of clear
+  // space between the border and the legend text top), above the cut-here line.
+  const compactHolidayNames = {
+    "New Year's Day":            "New Year Day",
+    "MLK Jr. Day":               "MLK Day",
+    "Presidents' Day":           "Presidents' Day",
+    "Cesar Chavez Day":          "Cesar Chavez",
+    "Memorial Day":              "Memorial Day",
+    "Juneteenth":                "Juneteenth",
+    "Independence Day":          "Independence Day",
+    "Labor Day":                 "Labor Day",
+    "Indigenous Peoples Day":    "Indigenous Peoples",
+    "Veterans Day":              "Veterans Day",
+    "Thanksgiving Day":          "Thanksgiving",
+    "Friday after Thanksgiving": "Day after Thxgvg",
+    "Christmas Day":             "Christmas Day",
+  };
+  slips.forEach(s => {
+    if (s.slotIdx === undefined) return; // Watch BID slip — no holiday markers on its rows
+    const seen = new Set();
+    let anyPaid = false;
+    rdoSlots[s.slotIdx].days.forEach(d => {
+      const h = holidayFor(d.date);
+      if (h) { seen.add(h.name); if (h.paid) anyPaid = true; }
+    });
+    if (seen.size === 0 && !anyPaid) return;
+    const presentEntries = HOLIDAY_CODES.filter(([name]) => seen.has(name));
+    const parts = [];
+    if (anyPaid) parts.push('$ - Paid MOU Holiday');
+    presentEntries.forEach(([n, c]) => parts.push(`${c}-${compactHolidayNames[n] || n}`));
+    doc.setPage(s.page + 1); // jsPDF pages are 1-indexed
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(80, 80, 80);
+    // Slip's outer bottom border sits at s.y + s.h. We want 4pt of clear space
+    // above the legend's cap-top, so baseline ≈ outer_bottom + 4 + cap_height(~4.5pt).
+    const legendY = s.y + s.h + 8.5;
+    doc.text(parts.join(' · '), PG_W / 2, legendY, { align: 'center' });
+  });
+
+  // ---- Filename + email-subject helpers ----
+  const lastName = (name || '').split(',')[0].trim() || 'unsigned';
+  // Filename-safe abbreviation per dispatch classification.
+  const rankShort =
+    rank === 'Principal Communications Operator' ? 'Pr CO' :
+    rank === 'Senior Communications Operator'    ? 'Sr CO' :
+                                                   'CIR';
+  const namePart = `${serial || 'X0000'}, ${rankShort} ${lastName}`;
+
+  // Format a list of {dp, year} with year stated only after the LAST DP of each
+  // year-run. Year-runs are groups of consecutive DPs that share the same year.
+  // Within a year-run, DPs are joined with commas plus an ampersand before the last:
+  //   1 DP:    "7"
+  //   2 DPs:   "7 & 8"      (ampersand only)
+  //   3+ DPs:  "7, 8 & 9"   (commas, ampersand before last)
+  // Year-runs are joined with ", ".
+  //   [{7,2026},{8,2026},{9,2026}]                   → "7, 8 & 9-2026"
+  //   [{7,2026}]                                     → "7-2026"
+  //   [{7,2026},{8,2026}]                            → "7 & 8-2026"
+  //   [{13,2026},{1,2027},{2,2027}]                  → "13-2026, 1 & 2-2027"
+  //   [{7,2026},{9,2026}] (non-contig but same year) → "7 & 9-2026"
+  const formatDPGroups = (list) => {
+    if (list.length === 0) return '';
+    const runs = []; // each: { dps:[...], year }
+    list.forEach(item => {
+      const last = runs[runs.length - 1];
+      if (last && last.year === item.year) last.dps.push(item.dp);
+      else runs.push({ dps: [item.dp], year: item.year });
+    });
+    const joinDPs = (dps) => {
+      if (dps.length === 1) return String(dps[0]);
+      if (dps.length === 2) return `${dps[0]} & ${dps[1]}`;
+      return `${dps.slice(0, -1).join(', ')} & ${dps[dps.length - 1]}`;
+    };
+    return runs.map(r => `${joinDPs(r.dps)}-${r.year}`).join(', ');
+  };
+
+  // Convenience for the singular-vs-plural prefix.
+  const dpPrefix = (list) => list.length === 1 ? 'DP' : 'DPs';
+
+  // Edge case: nothing was selected. Save a blank PDF using the same naming convention
+  // as a Watch bid, with "BLANK Bids" instead. Skip email/share entirely.
+  //   "99395, Sgt Dear, BLANK Bids for DPs 7, 8, 9-2026.pdf"
+  if (isEmptyBid) {
+    let earlyFilename;
+    if (isFullYear()) {
+      earlyFilename = `${namePart}, BLANK Full Year Bid - ${yrStart}.pdf`;
+    } else {
+      const allThreeEarly = dps.map(d => ({ dp: d.dp, year: d.year }));
+      earlyFilename = `${namePart}, BLANK Bids for ${dpPrefix(allThreeEarly)} ${formatDPGroups(allThreeEarly)}.pdf`;
+    }
+    doc.save(earlyFilename);
+    toast('PDF generated (no bid data)');
+    return;
+  }
+
+  // Build filename + email subject using the same year-only-at-end format.
+  //   Watch bid:    "99395, Sgt Dear, Watch Bid for DPs 7, 8, 9-2026.pdf"
+  //   RDO 1 DP:     "99395, Sgt Dear, RDO Bid for DP 7-2026.pdf"
+  //   RDO 2 DPs:    "99395, Sgt Dear, RDO Bid for DPs 7, 8-2026.pdf"
+  //   Year cross:   "99395, Sgt Dear, Watch Bid for DPs 13-2026, 1, 2-2027.pdf"
+  //   Full year:    "99395, Sgt Dear, Full Year Watch & RDO Bid - 2027.pdf"
+  let bidPart;
+  if (isFullYear()) {
+    bidPart = hasAnyRDO ? `Full Year Watch & RDO Bid - ${yrStart}` : `Full Year Watch Bid - ${yrStart}`;
+  } else if (hasAnyRDO) {
+    bidPart = `RDO Bid for ${dpPrefix(rdoDPs)} ${formatDPGroups(rdoDPs)}`;
+  } else {
+    const allThree = dps.map(d => ({ dp: d.dp, year: d.year }));
+    bidPart = `Watch Bid for ${dpPrefix(allThree)} ${formatDPGroups(allThree)}`;
+  }
+  const filename = `${namePart}, ${bidPart}.pdf`;
+  const subject = `${namePart}, ${bidPart}`;
+
+  const body = `Submitting my Watch / Days-Off Bid for the period DP ${dps[0].dp}–${dps[dps.length - 1].dp} (${fmtMDDYYYY(dps[0].start)} – ${fmtMDDYYYY(dps[dps.length - 1].end)}).\n\nForm attached.`;
+
+  shareOrFallbackPDF(doc, filename, recipients, subject, body);
+}
+
+// Email handoff strategy:
+//   • Mobile (Web Share API with file support) → share sheet with PDF attached;
+//     recipient is passed via `text` field. If the user cancels, we still open mailto
+//     so they get the recipient pre-filled in the To: field.
+//   • Desktop (no file-share support) → just download the PDF locally. No mailto,
+//     no email prep — the officer attaches and addresses manually from their mail app.
+async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
+  const blob = doc.output('blob');
+  const file = new File([blob], filename, { type: 'application/pdf' });
+
+  // Detect if we're on an actual mobile device. Web Share API on desktop browsers
+  // (Chrome on Windows in particular) reports support but routes through OS share
+  // dialogs that mishandle file attachments — producing "no_name" errors when sent
+  // to mail clients. Restricting to true mobile UAs avoids this.
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+  if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: subject,
+        text: `To: ${recipients.join(', ')}\n\n${body}`
+      });
+      toast('PDF ready to send');
+      return;
+    } catch (err) {
+      // User cancelled the share sheet OR an error — fall through to mailto so they
+      // still get the recipient pre-filled in To:.
+      const mailto = `mailto:${encodeURIComponent(recipients.join(','))}` +
+        `?subject=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(body + `\n\n(Please attach the downloaded ${filename})`)}`;
+      window.location.href = mailto;
+      setTimeout(() => { doc.save(filename); }, 200);
+      toast('PDF downloading — attach it to the email');
+      return;
+    }
+  }
+
+  // Desktop (or any non-mobile context) → just download the PDF. The officer handles
+  // emailing themselves.
+  doc.save(filename);
+  toast('PDF downloaded');
+}
+
+function generateWatchPDF() { generateCombinedPDF(); }
+function generateRDOPDF() { generateCombinedPDF(); }
+
+// Draw a single APD-086 form block at top-y `y`, occupying height `h`.
+// `data` carries: name, serial, curWatch, dpHeader, dpRange, startDate, endDate,
+//                 firstChoice, secondChoice, dateRows (Date[][] — one per row),
+//                 markRows (string[][] — one per mark row).
+function drawAPD086(doc, y, h, data) {
+  const xOuter = PAGE_MARGIN;
+  const wOuter = PG_W - PAGE_MARGIN * 2;
+
+  // Double border around the form: outer rect with 6pt top/bottom inset, inner rect
+  // 5pt inside the outer. Both drawn before content so content sits inside.
+  const outerInsetY = 6;
+  const innerOffset = 5;
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.5);
+  doc.rect(xOuter, y + outerInsetY, wOuter, h - outerInsetY * 2);
+  doc.setLineWidth(0.4);
+  doc.rect(xOuter + innerOffset, y + outerInsetY + innerOffset,
+           wOuter - innerOffset * 2, h - outerInsetY * 2 - innerOffset * 2);
+
+  // Content sits inside the inner border. Add a small gap (3pt) inside the inner rect.
+  const contentPad = 3;
+  const x = xOuter + innerOffset + contentPad;
+  const w = wOuter - (innerOffset + contentPad) * 2;
+  const contentTopY = y + outerInsetY + innerOffset + contentPad;
+  const contentBottomY = y + h - outerInsetY - innerOffset - contentPad;
+
+  // Compute internal row heights to fit content area.
+  const titleH = 18;     // 2 lines: title + subtitle (centered, with breathing room)
+  const officerH = 22;   // 5-column officer info
+  const subtitleH = 12;
+  // Choice row visually trimmed by 3pt to create breathing space between its
+  // bottom border and the day-of-week header below. The "slot" still consumes
+  // 22pt of cy advancement so the rest of the layout stays unchanged — the 3pt
+  // appears as empty space between the choice row's bottom border and the DOW
+  // header's top border.
+  const choiceH = 19;
+  const choiceGap = 3;
+  const headerRowH = 11; // day-of-week header
+  const dateRowH = 13;
+  const markRowH = 13;
+
+  const nDateRows = data.dateRows.length;
+  const nMarkRows = data.markRows.length;
+
+  // Title (2 stacked centered lines), vertically centered in the title block.
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('AIRPORT POLICE DISPATCH', PG_W / 2, contentTopY + 7, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text('WATCH/DAYS-OFF BID REQUEST', PG_W / 2, contentTopY + 16, { align: 'center' });
+  let cy = contentTopY + titleH;
+
+  // Officer info row (5 columns)
+  drawOfficerRow(doc, x, cy, w, officerH, data);
+  cy += officerH;
+
+  // Subtitle line — centered vertically in the subtitle block.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('MARK FIRST AND SECOND CHOICE OF WATCH ASSIGNMENT OR DAYS OFF',
+           PG_W / 2, cy + 8, { align: 'center' });
+  cy += subtitleH;
+
+  // 1ST CHOICE | 2ND CHOICE | SUPERVISOR'S INITIALS | DATE RECEIVED row.
+  // Drawn at the trimmed height (choiceH); cy then advances by choiceH + choiceGap
+  // so the DOW header below is offset by a 3pt breathing space.
+  drawChoiceRow(doc, x, cy, w, choiceH, data);
+  cy += choiceH + choiceGap;
+
+  // Day-of-week header (28 columns, SU M TU W TH F SA × 4)
+  drawDOWHeader(doc, x, cy, w, headerRowH);
+  cy += headerRowH;
+
+  const cellW = w / 28;
+
+  // Date rows. data.dateRowLabels (parallel to dateRows) optionally carries a
+  // 28-letter label array per row; the row will overlay shaded cells with bold
+  // letters (used to merge the WATCH BID label into the 4th DP date row).
+  data.dateRows.forEach((dateRow, idx) => {
+    const labels = data.dateRowLabels ? data.dateRowLabels[idx] : null;
+    drawDateRow(doc, x, cy, w, dateRowH, cellW, dateRow, labels);
+    cy += dateRowH;
+  });
+
+  // Mark rows (each row of strings becomes its own row of marks). data.holidayRowIdxs
+  // (array of 0-based indices) marks which rows should render in muted gray to match
+  // the weekend-shading aesthetic — used for the holiday code row and "$" row on
+  // RDO slips so they don't compete visually with the officer's selections.
+  // data.shadedMarkRowIdxs (set of 0-based indices) marks which rows render with
+  // shaded fill behind their letters — used for the WATCH BID label row on 3-DP slips.
+  const holidayIdxs = new Set(data.holidayRowIdxs || []);
+  const shadedIdxs = new Set(data.shadedMarkRowIdxs || []);
+  data.markRows.forEach((markRow, idx) => {
+    const isHoliday = holidayIdxs.has(idx);
+    const color = isHoliday ? [WATERMARK_GRAY, WATERMARK_GRAY, WATERMARK_GRAY] : null;
+    // Optional dollarRow per mark row — paints "$" under cells flagged as paid
+    // holidays before the actual mark stamps on top. Used by RDO slips to put $
+    // on the state1 / state2 rows whenever the day is a paid MOU holiday.
+    const dollarRow = data.dollarRows ? data.dollarRows[idx] : null;
+    drawMarkRow(doc, x, cy, w, markRowH, cellW, markRow, color, shadedIdxs.has(idx), isHoliday, dollarRow);
+    cy += markRowH;
+  });
+
+  // Optional per-slip mini legend, placed just above the inner bottom border.
+  if (data.showLegend) {
+    // Legend baseline: 3pt below the gap midpoint — shifts the APD FORM stamp and
+    // legend slightly DOWN from optical center so they sit closer to (but cleanly
+    // above) the inner border.
+    const legendY = (cy + contentBottomY) / 2 + 3;
+    // "APD FORM 086" stamp — bold, bottom-left of the slip's content area.
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.4);
+    doc.setTextColor(70, 70, 70);
+    doc.text('APD FORM 086', x + 2, legendY);
+    // Centered symbol legend.
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.4);
+    doc.setTextColor(70, 70, 70);
+    const legendText = 'O-Regular Day Off · V-Vacation · T-Training · M/L-Military Leave · H-Holiday · JD-Jury Duty · FL-Family Leave · SK-Sick';
+    doc.text(legendText, PG_W / 2, legendY, { align: 'center' });
+  }
+}
+
+function drawOfficerRow(doc, x, y, w, rowH, data) {
+  const cw = [w * 0.36, w * 0.10, w * 0.10, w * 0.22, w * 0.22];
+  doc.setDrawColor(BORDER_GRAY, BORDER_GRAY, BORDER_GRAY);
+  doc.setLineWidth(0.6);
+  doc.rect(x, y, w, rowH);
+  let cx = x;
+  for (let i = 0; i < cw.length - 1; i++) {
+    cx += cw[i];
+    doc.line(cx, y, cx, y + rowH);
+  }
+  const headers = ['LAST NAME, FI, SERIAL #:', 'WATCH', data.dpHeader || 'DP#s', 'DP START DATE:', 'DP END DATE:'];
+  const values  = [`${data.name}  #${data.serial}`, data.curWatch || '', data.dpRange || '', data.startDate || '', data.endDate || ''];
+  cx = x;
+  for (let i = 0; i < cw.length; i++) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(headers[i], cx + 3, y + 7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(String(values[i]), cx + cw[i] / 2, y + rowH - 5, { align: 'center' });
+    cx += cw[i];
+  }
+}
+
+function drawChoiceRow(doc, x, y, w, rowH, data) {
+  const cw = w / 4;
+  doc.setDrawColor(BORDER_GRAY, BORDER_GRAY, BORDER_GRAY);
+  doc.setLineWidth(0.6);
+  doc.rect(x, y, w, rowH);
+  for (let i = 1; i < 4; i++) doc.line(x + cw * i, y, x + cw * i, y + rowH);
+  const headers = ['1ST CHOICE', '2ND CHOICE', "SUPERVISOR'S INITIALS", 'DATE RECEIVED'];
+  const values  = [data.firstChoice || '', data.secondChoice || '', '', ''];
+  for (let i = 0; i < 4; i++) {
+    const cx = x + cw * i;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.text(headers[i], cx + 3, y + 8);
+    if (values[i]) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(String(values[i]), cx + cw / 2, y + rowH - 4, { align: 'center' });
+    }
+  }
+}
+
+function drawDOWHeader(doc, x, y, w, rowH) {
+  const cellW = w / 28;
+  const dows = ['SU','M','TU','W','TH','F','SA'];
+  doc.setFillColor(FAINT_FILL, FAINT_FILL, FAINT_FILL);
+  doc.rect(x, y, w, rowH, 'F');
+  doc.setDrawColor(BORDER_GRAY, BORDER_GRAY, BORDER_GRAY);
+  doc.setLineWidth(0.4);
+  doc.rect(x, y, w, rowH);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(0, 0, 0);
+  for (let i = 0; i < 28; i++) {
+    const cx = x + cellW * i;
+    if (i > 0) doc.line(cx, y, cx, y + rowH);
+    doc.text(dows[i % 7], cx + cellW / 2, y + 7.5, { align: 'center' });
+  }
+}
+
+function drawDateRow(doc, x, y, w, rowH, cellW, dateRow, labelLetters) {
+  // Shade weekend columns (Sundays at i%7==0, Saturdays at i%7==6) before drawing borders.
+  doc.setFillColor(FAINT_FILL, FAINT_FILL, FAINT_FILL);
+  for (let i = 0; i < 28; i++) {
+    const dow = i % 7;
+    if (dow === 0 || dow === 6) {
+      doc.rect(x + cellW * i, y, cellW, rowH, 'F');
+    }
+  }
+  doc.setDrawColor(BORDER_GRAY, BORDER_GRAY, BORDER_GRAY);
+  doc.setLineWidth(0.4);
+  doc.rect(x, y, w, rowH);
+  for (let i = 0; i < 28; i++) {
+    const cx = x + cellW * i;
+    if (i > 0) doc.line(cx, y, cx, y + rowH);
+    const d = dateRow[i];
+    const hasLabel = labelLetters && labelLetters[i];
+
+    // Pass 1: bold label letter rendered LARGE in light gray (matching the form's
+    // header shading), centered in the cell. Cell itself stays white — the gray
+    // is in the letter glyphs themselves.
+    if (hasLabel) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(WATERMARK_GRAY, WATERMARK_GRAY, WATERMARK_GRAY);
+      doc.text(labelLetters[i], cx + cellW / 2, y + 9.5, { align: 'center' });
+    }
+
+    // Pass 2: date M/D drawn ON TOP of the gray letter. The gray letter is light
+    // enough that the black date reads cleanly without an outline.
+    if (d) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${d.getMonth()+1}/${d.getDate()}`,
+               cx + cellW / 2, y + 8.5, { align: 'center' });
+    }
+  }
+}
+
+function drawMarkRow(doc, x, y, w, rowH, cellW, markRow, textColor, shadeMarks, outline, dollarRow) {
+  // Shade weekend columns first (matches the date row).
+  doc.setFillColor(FAINT_FILL, FAINT_FILL, FAINT_FILL);
+  for (let i = 0; i < 28; i++) {
+    const dow = i % 7;
+    if (dow === 0 || dow === 6) {
+      doc.rect(x + cellW * i, y, cellW, rowH, 'F');
+    }
+  }
+  doc.setDrawColor(BORDER_GRAY, BORDER_GRAY, BORDER_GRAY);
+  doc.setLineWidth(0.4);
+  doc.rect(x, y, w, rowH);
+  // shadeMarks renders the letters themselves in light gray (matching the form's
+  // header shading) instead of black — used for the WATCH BID label row so it reads
+  // as a visual hint rather than a bold mark. Cell fill stays white.
+  let [r, g, b] = textColor || [0, 0, 0];
+  if (shadeMarks) [r, g, b] = [WATERMARK_GRAY, WATERMARK_GRAY, WATERMARK_GRAY];
+  for (let i = 0; i < 28; i++) {
+    const cx = x + cellW * i;
+    if (i > 0) doc.line(cx, y, cx, y + rowH);
+
+    // Pass 1: paid-holiday "$" watermark. Drawn first so any state mark below
+    // stamps ON TOP of it. The "$" is rendered LARGER than the state marks (12pt
+    // vs 9pt) so it peeks out around the O on RDO+paid-holiday cells, and gets
+    // the same white outline treatment as the holiday codes so it stays legible
+    // against gray weekend shading.
+    if (dollarRow && dollarRow[i]) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      // White outline (8 directions, ±1pt)
+      doc.setTextColor(255, 255, 255);
+      const r0 = 1.0;
+      const offsets = [
+        [-r0, 0], [r0, 0], [0, -r0], [0, r0],
+        [-r0*0.7, -r0*0.7], [r0*0.7, -r0*0.7],
+        [-r0*0.7, r0*0.7], [r0*0.7, r0*0.7],
+      ];
+      offsets.forEach(([dx, dy]) => {
+        doc.text('$', cx + cellW / 2 + dx, y + 10 + dy, { align: 'center' });
+      });
+      // Gray fill on top of the white halo.
+      doc.setTextColor(WATERMARK_GRAY, WATERMARK_GRAY, WATERMARK_GRAY);
+      doc.text('$', cx + cellW / 2, y + 10, { align: 'center' });
+    }
+
+    // Pass 2: the actual mark letter (state1 / state2 / holiday code / WATCH BID).
+    const m = markRow[i];
+    if (m) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      // Optional white outline around the text — paint the letter ~8 times at small
+      // offsets in white before stamping the fill color on top. Used for holiday
+      // codes so they pop out against the gray weekend shading.
+      if (outline) {
+        doc.setTextColor(255, 255, 255);
+        const r0 = 1.0; // outline radius in pt (~3px at 200dpi screen)
+        const offsets = [
+          [-r0, 0], [r0, 0], [0, -r0], [0, r0],
+          [-r0*0.7, -r0*0.7], [r0*0.7, -r0*0.7],
+          [-r0*0.7, r0*0.7], [r0*0.7, r0*0.7],
+        ];
+        offsets.forEach(([dx, dy]) => {
+          doc.text(m, cx + cellW / 2 + dx, y + 9.5 + dy, { align: 'center' });
+        });
+      }
+      doc.setTextColor(r, g, b);
+      doc.text(m, cx + cellW / 2, y + 9.5, { align: 'center' });
+    }
+  }
+}
+
+// Date format helper (MM/DD/YYYY for headers, matches the sample form).
+function fmtMDDYYYY(d) {
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+</script>
+
+<!-- Cloudflare Web Analytics — privacy-friendly visit tracking. No cookies, no
+     fingerprinting, no personal data collection. Aggregate page-view + Core Web
+     Vitals only. Token specific to laapoa.github.io; if the dispatch tool is
+     deployed under a different host, swap this for that host's token. -->
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "0b605e2cf34346319d14340816700da0"}'></script>
+<!-- End Cloudflare Web Analytics -->
+
+</body>
+</html>
