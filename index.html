@@ -183,12 +183,15 @@
   }
   .field-grid.four-col {
     /* Columns: Name | Watch | Serial | Classification.
-       Name and Classification are the two long-content fields, sized equally
-       at 2fr each so the row reads as a balanced left/right pairing. Watch
-       (a single digit 1/2/3) and Serial (5-char A1234) are the two short
-       fields, both 0.5fr. Total = 5fr; the row's right edge then justifies
-       cleanly against the full-width Bid Period dropdown below. */
-    grid-template-columns: 2fr 0.5fr 0.5fr 2fr;
+       Name and Classification are the two long-content fields, sized
+       at 1.9fr / 2fr so the row reads as a balanced left/right pairing.
+       Watch is bumped to 0.6fr (~2 character widths wider than the natural
+       0.5fr) so the dropdown has breathing room around the chosen value;
+       the corresponding 0.1fr is taken off Name. Serial stays at 0.5fr —
+       its content (A1234) only needs a small input. Total = 5fr; the
+       row's right edge then justifies cleanly against the full-width Bid
+       Period dropdown below. */
+    grid-template-columns: 1.9fr 0.6fr 0.5fr 2fr;
   }
   .field {
     display: flex;
@@ -1209,21 +1212,22 @@
     .picker { padding: 16px; }
     .card { padding: 18px; }
     .field-grid { grid-template-columns: 1fr; }
-    /* Mobile 4-col layout. We use 4 equal narrow tracks and assign explicit
+    /* Mobile 4-col layout. We use 4 narrow tracks and assign explicit
        column spans per field so the visual proportions can differ between
        row 1 and row 2 (CSS Grid columns are uniform across rows, but spans
-       are per-item). Result:
-         Row 1:  Name  Name  Name  Watch         (Watch is 1/4 = half its
-                                                   prior 1/2 share; Name takes
-                                                   the freed space)
-         Row 2:  Serial  Cls   Cls   Cls         (Serial gets a small 1/4
-                                                   track sized to its 96-120px
-                                                   input; Classification takes
-                                                   the rest, beginning right
-                                                   at Serial's right edge)
+       are per-item). Track 4 is 1.3fr (the others 1fr) so the Watch cell —
+       which sits alone in track 4 — is ~2 character widths wider than a
+       perfectly equal 1fr would make it. Result:
+         Row 1:  Name  Name  Name  Watch         (Watch widened ~17px;
+                                                   Name's 3-track span loses
+                                                   the same total width)
+         Row 2:  Serial  Cls   Cls   Cls         (Serial gets a small 1-track
+                                                   slot sized to its A1234
+                                                   input; Classification spans
+                                                   the wider rest of the row)
        The trailing .field.full uses its own grid-column: 1/-1 rule so the
        Bid Period dropdown spans all 4 tracks. */
-    .field-grid.four-col { grid-template-columns: repeat(4, 1fr); }
+    .field-grid.four-col { grid-template-columns: 1fr 1fr 1fr 1.3fr; }
     .field-grid.four-col > .field:nth-child(1) { grid-column: span 3; } /* Name */
     .field-grid.four-col > .field:nth-child(2) { grid-column: span 1; } /* Watch */
     .field-grid.four-col > .field:nth-child(3) { grid-column: span 1; } /* Serial */
