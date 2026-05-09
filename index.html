@@ -207,29 +207,92 @@
     background: white;
   }
 
-  /* ===== SERIAL KEYPAD (mobile only, on-focus bottom sheet) =====
-     Custom on-screen keypad for entering the dispatcher serial in the strict
-     1 letter (A-F) + 4 digits format. Behaves like the OS keyboard:
+  /* ===== SERIAL WIDGET (always visible, replaces the text input) =====
+     The widget is a single-line field with two tappable halves:
+       • Letter half: shows the chosen letter A–F (or "_" if unset)
+       • Digits half: shows four digit cells (or "_" placeholders)
+     Tapping either half opens the bottom sheet pre-set to that mode.
+     The hidden #w-serial input holds the canonical concatenated value. */
+  .serial-widget {
+    display: flex;
+    align-items: stretch;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .serial-widget:focus-within {
+    border-color: var(--navy);
+    background: white;
+  }
+  .serial-slot {
+    background: transparent;
+    border: 0;
+    padding: 6px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    font-family: 'Inter', sans-serif;
+  }
+  .serial-slot:focus { outline: none; background: rgba(201, 169, 97, 0.08); }
+  .serial-slot:hover { background: rgba(201, 169, 97, 0.06); }
+  .serial-letter-slot { flex: 0 0 auto; min-width: 76px; }
+  .serial-digits-slot { flex: 1 1 auto; min-width: 0; }
+  .serial-slot-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .serial-slot-value {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+    color: var(--ink);
+    letter-spacing: 0.08em;
+    line-height: 1.15;
+  }
+  .serial-letter-slot .serial-slot-value { text-align: center; }
+  .digits-track {
+    display: flex;
+    gap: 8px;
+  }
+  .digit-cell {
+    display: inline-block;
+    min-width: 14px;
+    text-align: center;
+  }
+  .digit-cell.placeholder { color: var(--line); }
+  .serial-slot-divider {
+    width: 1px;
+    background: var(--line);
+    margin: 4px 0;
+  }
 
-       • Hidden by default, slides up from the bottom edge of the viewport when
-         the serial input gets focus. Slides back down on blur.
-       • Shown only on coarse-pointer / narrow-viewport contexts. Desktop users
-         get the regular text input and physical keyboard.
-       • Header bar shows a live preview of what's been entered so the user can
-         see their progress even if the keypad is covering the form input.
-       • Done button (top-right of the header) dismisses the keypad explicitly.
+  /* ===== SERIAL KEYPAD BOTTOM SHEET =====
+     Hidden by default, slides up from bottom when a serial-slot is tapped.
+     Dual-mode: roll (letter cylinder) or numpad (digit entry). The mode is
+     selected by which slot was tapped, and a pivot button inside each mode
+     lets the user flip without dismissing.
 
-     Behavior of the keys themselves (managed in JS):
-       1. Initially: letter row (A-F) is active; number row is disabled+grayed.
-       2. User taps a letter → it locks in as the first character, the letter
-          row dims, and the number row becomes active.
-       3. User taps 4 digits → each appends to the serial; once 5 chars total
-          (letter + 4 digits), all keys disable.
-       4. ⌫ removes the last character; Clear wipes the field. */
+     Behavior:
+       1. Tap letter half → sheet opens in roll mode; wheel pre-positioned to
+          current letter (or A if blank).
+       2. Spin/scroll the wheel to a letter. The selection commits live as the
+          wheel snaps to a position. No "select" button needed.
+       3. Tap "Tap digits ›" or directly tap the digits half → sheet flips to
+          numpad mode.
+       4. Numpad lets the user enter / backspace / clear digits 0–9.
+       5. Done dismisses the sheet. Tapping anywhere outside also dismisses
+          via blur. */
   .serial-keypad {
-    /* Always rendered in the DOM, but display: none on desktop so it never
-       interferes there. On mobile it's display: block but transformed offscreen
-       until the .open class is applied. */
     display: none;
     position: fixed;
     left: 0;
@@ -248,9 +311,7 @@
     transform: translateY(0);
   }
 
-  /* Header bar: prompt label + live value preview on the left, Done button on
-     the right. Sits above the key rows and stays visible even as the user
-     scrolls the form behind. */
+  /* Header bar: prompt + value preview on the left, Done on the right. */
   .serial-keypad-head {
     display: flex;
     align-items: center;
@@ -258,14 +319,14 @@
     gap: 10px;
     padding: 6px 6px 8px;
     border-bottom: 1px solid var(--paper-dark);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   .skp-prompt {
     display: flex;
     align-items: baseline;
     gap: 8px;
     flex: 1;
-    min-width: 0; /* allow value text to ellipsis if it overflows */
+    min-width: 0;
   }
   .skp-prompt-label {
     font-size: 10px;
@@ -286,10 +347,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .skp-prompt-value.placeholder {
-    color: var(--line);
-    font-weight: 500;
-  }
+  .skp-prompt-value.placeholder { color: var(--line); font-weight: 500; }
   .skp-done-btn {
     background: var(--navy);
     color: var(--gold-bright);
@@ -308,23 +366,145 @@
   }
   .skp-done-btn:active { background: var(--navy-deep); }
 
+  /* Mode containers. Only the active mode is visible; the other has [hidden]. */
+  .skp-mode { padding: 8px 0 6px; }
+  .skp-mode[hidden] { display: none; }
+  .skp-mode-instruction {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .skp-mode-switch {
+    display: block;
+    width: 100%;
+    padding: 9px 0;
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+    color: var(--ink-soft);
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin: 10px 0 4px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .skp-mode-switch:hover, .skp-mode-switch:active {
+    background: var(--paper-dark);
+    border-color: var(--ink-soft);
+    color: var(--navy);
+  }
+
+  /* ===== ROLL MODE: revolver-cylinder wheel =====
+     Borrows the gunmetal aesthetic from the prior serial dialer:
+       • Tall pill-shaped frame with dark steel gradient + inset shadows
+       • Half-capsule notch on the selected (centered) row
+       • 3 letters in view; the middle one is selected
+       • Snap-scrolls via CSS scroll-snap-type: y mandatory */
+  .serial-wheel-frame {
+    position: relative;
+    width: 110px;
+    height: 162px; /* 3 items × 54px */
+    margin: 6px auto 0;
+    background: linear-gradient(180deg, #2c2c34 0%, #15151a 100%);
+    border-radius: 14px;
+    border: 1px solid #3a3a44;
+    box-shadow:
+      inset 0 2px 8px rgba(0, 0, 0, 0.65),
+      inset 0 -1px 2px rgba(255, 255, 255, 0.04),
+      0 2px 6px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+  }
+  .serial-wheel-track {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    /* Pad above first / below last so they can center-align under snap. */
+    padding: 54px 0;
+    scroll-padding-top: 54px;
+    scroll-padding-bottom: 54px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  .serial-wheel-track::-webkit-scrollbar { display: none; }
+  .serial-wheel-item {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    color: #888;
+    transition: color 0.15s, text-shadow 0.15s;
+  }
+  .serial-wheel-item.selected {
+    color: var(--gold-bright);
+    text-shadow: 0 0 10px rgba(230, 196, 120, 0.55);
+  }
+  /* Top and bottom fade so the non-selected items dim into the cylinder body. */
+  .serial-wheel-fade-top, .serial-wheel-fade-bot {
+    position: absolute;
+    left: 0; right: 0;
+    height: 54px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .serial-wheel-fade-top {
+    top: 0;
+    background: linear-gradient(to bottom, rgba(21, 21, 26, 0.92) 0%, rgba(21, 21, 26, 0) 100%);
+  }
+  .serial-wheel-fade-bot {
+    bottom: 0;
+    background: linear-gradient(to top, rgba(21, 21, 26, 0.92) 0%, rgba(21, 21, 26, 0) 100%);
+  }
+  /* The chamber bezel — a gold-edged horizontal band at the center indicating
+     the selected slot. Sits on top of the dark cylinder, behind the digits. */
+  .serial-wheel-cylinder {
+    position: absolute;
+    top: 54px;
+    height: 54px;
+    left: 8px; right: 8px;
+    border-top: 1px solid var(--gold);
+    border-bottom: 1px solid var(--gold);
+    background: linear-gradient(
+      to bottom,
+      rgba(201, 169, 97, 0.06) 0%,
+      rgba(201, 169, 97, 0.14) 50%,
+      rgba(201, 169, 97, 0.06) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 3px;
+    box-shadow: inset 0 0 4px rgba(201, 169, 97, 0.18);
+  }
+
+  /* ===== NUMPAD MODE ===== */
   .serial-keypad-row {
     display: grid;
     gap: 5px;
     margin-bottom: 5px;
   }
   .serial-keypad-row:last-child { margin-bottom: 0; }
-  .serial-keypad-row.letters { grid-template-columns: repeat(6, 1fr); }
-  .serial-keypad-row.digits { grid-template-columns: repeat(3, 1fr); }
-  .serial-keypad-row.actions { grid-template-columns: repeat(3, 1fr); }
+  .serial-keypad-row.digits { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .serial-keypad-row.actions { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 0 5px 0; padding: 0; border: 0; }
   .skp-key {
     background: white;
     border: 1.5px solid var(--line);
     color: var(--ink);
     font-family: 'Oswald', sans-serif;
     font-weight: 700;
-    font-size: 17px;
-    padding: 11px 0;
+    font-size: 18px;
+    padding: 13px 0;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.1s ease;
@@ -343,8 +523,7 @@
     cursor: not-allowed;
     opacity: 0.55;
   }
-  .skp-key.letter.active-row { border-color: var(--gold); }
-  .skp-key.digit.active-row { border-color: var(--gold); }
+  .skp-key.digit { border-color: var(--gold); }
   .skp-key.action {
     font-size: 12px;
     letter-spacing: 0.05em;
@@ -352,18 +531,30 @@
   }
   .skp-key.action.bksp { color: var(--vac); }
 
-  /* Show keypad block-level on coarse-pointer / narrow viewport. The .open
-     class still controls slide-in/out; without .open it stays translated
-     offscreen via the transform set above. */
+  /* Show keypad on coarse-pointer / narrow viewport. The .open class still
+     controls slide-in/out; without .open it stays translated offscreen. */
   @media (pointer: coarse), (max-width: 720px) {
     .serial-keypad { display: block; }
-    /* Suppress the OS keyboard while focused — the keypad is the sole input.
-       caret-color: transparent hides the blinking I-beam since taps don't
-       move it anyway. */
-    #w-serial.kp-managed { caret-color: transparent; }
+  }
+  /* Desktop with a fine pointer also gets the sheet — clicking a serial slot
+     is the only way to enter a serial regardless of device. */
+  @media (pointer: fine) and (min-width: 721px) {
+    .serial-keypad { display: block; }
+    .serial-keypad {
+      max-width: 420px;
+      left: 50%;
+      right: auto;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(calc(100% + 24px));
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+    .serial-keypad.open {
+      transform: translateX(-50%) translateY(0);
+    }
   }
 
-  /* ===== END SERIAL KEYPAD ===== */
+  /* ===== END SERIAL WIDGET / KEYPAD ===== */
 
   /* ===== BID MODE TOGGLE ===== */
   .bid-mode-toggle {
@@ -1375,13 +1566,32 @@
         </select>
       </div>
       <div class="field">
-        <label for="w-serial">Serial Number</label>
-        <input type="text" id="w-serial" placeholder="e.g. A1234" inputmode="text" autocapitalize="characters">
-        <!-- Mobile keypad. Slides up as a bottom sheet only when the serial
-             input is focused. Letter row is enforced first; numbers light up
-             only after a letter is committed, per dispatch's 1-letter +
-             4-digit serial format. Desktop users see this hidden via CSS
-             media query. -->
+        <label>Serial Number</label>
+        <!-- Split widget: tap the letter half to roll A-F, tap the digits half
+             to bring up the numeric pad. The hidden input is the canonical value
+             read by all downstream code; updates dispatch input/change events
+             so persistOfficer + RDO display sync naturally. -->
+        <div class="serial-widget" id="w-serial-widget" role="group" aria-label="Dispatcher serial number">
+          <button type="button" class="serial-slot serial-letter-slot" data-mode="roll" aria-label="Pick letter A through F">
+            <span class="serial-slot-label">Letter</span>
+            <span class="serial-slot-value" id="serial-letter-display">_</span>
+          </button>
+          <div class="serial-slot-divider" aria-hidden="true"></div>
+          <button type="button" class="serial-slot serial-digits-slot" data-mode="numpad" aria-label="Enter 4 digits">
+            <span class="serial-slot-label">Digits</span>
+            <span class="serial-slot-value digits-track">
+              <span class="digit-cell placeholder" id="serial-d1">_</span>
+              <span class="digit-cell placeholder" id="serial-d2">_</span>
+              <span class="digit-cell placeholder" id="serial-d3">_</span>
+              <span class="digit-cell placeholder" id="serial-d4">_</span>
+            </span>
+          </button>
+        </div>
+        <input type="hidden" id="w-serial" name="serial" value="">
+
+        <!-- Bottom-sheet keypad. Two modes: roll (letter cylinder) and numpad
+             (digit entry). Mode is selected by which serial-slot was tapped, and
+             can be flipped via the in-sheet "Switch to ..." pivot button. -->
         <div class="serial-keypad" id="w-serial-keypad" aria-hidden="true">
           <div class="serial-keypad-head">
             <div class="skp-prompt">
@@ -1390,38 +1600,54 @@
             </div>
             <button type="button" class="skp-done-btn" data-act="done">Done</button>
           </div>
-          <div class="serial-keypad-row letters">
-            <button type="button" class="skp-key letter" data-c="A">A</button>
-            <button type="button" class="skp-key letter" data-c="B">B</button>
-            <button type="button" class="skp-key letter" data-c="C">C</button>
-            <button type="button" class="skp-key letter" data-c="D">D</button>
-            <button type="button" class="skp-key letter" data-c="E">E</button>
-            <button type="button" class="skp-key letter" data-c="F">F</button>
+
+          <!-- ROLL MODE: revolver-cylinder wheel for the letter half -->
+          <div class="skp-mode skp-mode-roll" id="skp-mode-roll">
+            <div class="skp-mode-instruction">Scroll to select letter</div>
+            <div class="serial-wheel-frame">
+              <div class="serial-wheel-track" id="serial-wheel-track">
+                <div class="serial-wheel-item" data-letter="A">A</div>
+                <div class="serial-wheel-item" data-letter="B">B</div>
+                <div class="serial-wheel-item" data-letter="C">C</div>
+                <div class="serial-wheel-item" data-letter="D">D</div>
+                <div class="serial-wheel-item" data-letter="E">E</div>
+                <div class="serial-wheel-item" data-letter="F">F</div>
+              </div>
+              <div class="serial-wheel-fade-top" aria-hidden="true"></div>
+              <div class="serial-wheel-fade-bot" aria-hidden="true"></div>
+              <div class="serial-wheel-cylinder" aria-hidden="true"></div>
+            </div>
+            <button type="button" class="skp-mode-switch" data-mode="numpad">Tap digits ›</button>
           </div>
-          <div class="serial-keypad-row digits">
-            <button type="button" class="skp-key digit" data-c="1">1</button>
-            <button type="button" class="skp-key digit" data-c="2">2</button>
-            <button type="button" class="skp-key digit" data-c="3">3</button>
-            <button type="button" class="skp-key digit" data-c="4">4</button>
-            <button type="button" class="skp-key digit" data-c="5">5</button>
-            <button type="button" class="skp-key digit" data-c="6">6</button>
-            <button type="button" class="skp-key digit" data-c="7">7</button>
-            <button type="button" class="skp-key digit" data-c="8">8</button>
-            <button type="button" class="skp-key digit" data-c="9">9</button>
-          </div>
-          <div class="serial-keypad-row actions">
-            <button type="button" class="skp-key action bksp" data-act="bksp">⌫ Back</button>
-            <button type="button" class="skp-key digit" data-c="0">0</button>
-            <button type="button" class="skp-key action clr" data-act="clr">Clear</button>
+
+          <!-- NUMPAD MODE: 3x3 + bottom action row, no letters -->
+          <div class="skp-mode skp-mode-numpad" id="skp-mode-numpad" hidden>
+            <button type="button" class="skp-mode-switch" data-mode="roll">‹ Tap letter</button>
+            <div class="serial-keypad-row digits">
+              <button type="button" class="skp-key digit" data-c="1">1</button>
+              <button type="button" class="skp-key digit" data-c="2">2</button>
+              <button type="button" class="skp-key digit" data-c="3">3</button>
+              <button type="button" class="skp-key digit" data-c="4">4</button>
+              <button type="button" class="skp-key digit" data-c="5">5</button>
+              <button type="button" class="skp-key digit" data-c="6">6</button>
+              <button type="button" class="skp-key digit" data-c="7">7</button>
+              <button type="button" class="skp-key digit" data-c="8">8</button>
+              <button type="button" class="skp-key digit" data-c="9">9</button>
+            </div>
+            <div class="serial-keypad-row actions">
+              <button type="button" class="skp-key action bksp" data-act="bksp">⌫ Back</button>
+              <button type="button" class="skp-key digit" data-c="0">0</button>
+              <button type="button" class="skp-key action clr" data-act="clr">Clear</button>
+            </div>
           </div>
         </div>
       </div>
       <div class="field">
         <label for="w-rank">Classification</label>
         <select id="w-rank">
-          <option value="Communications Information Representative">Communications Information Representative</option>
-          <option value="Senior Communications Operator">Senior Communications Operator</option>
-          <option value="Principal Communications Operator">Principal Communications Operator</option>
+          <option value="Comm Information Rep">Comm Information Rep</option>
+          <option value="Sr. Comm Op">Sr. Comm Op</option>
+          <option value="Principal Comm Op">Principal Comm Op</option>
         </select>
       </div>
       <div class="field full">
@@ -1884,59 +2110,104 @@ function paintWatchPicker() {
 paintWatchPicker();
 
 /* ============================================================
-   SERIAL NUMBER — 1 letter (A–F) + 4 numeric digits, no leading-zero stripping.
-   Examples of valid serials: A1234, B0007, F9999.
+   SERIAL WIDGET + DUAL-MODE BOTTOM SHEET
+   The serial value is split into two pieces of state:
+     • letter — one of A–F, or '' when unset
+     • digits — 0–4 digits as a string, e.g. '123' or '1234'
+   The hidden #w-serial input holds the concatenation (letter + digits) and is
+   the single source of truth read by all downstream code (PDF gen, persist,
+   RDO display sync). Whenever either piece changes we rewrite the input value
+   and dispatch an input event so existing listeners pick up the change.
    ============================================================ */
 const SERIAL_PATTERN = /^[A-F][0-9]{4}$/;
+const SERIAL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+const WHEEL_ITEM_HEIGHT = 54; // must match .serial-wheel-item { height: ... }
 
-function setupSerialField(inputEl) {
-  inputEl.setAttribute('inputmode', 'text');
-  inputEl.setAttribute('pattern', '[A-Fa-f][0-9]{4}');
-  inputEl.setAttribute('maxlength', '5');
-  // Force-uppercase the letter prefix and reject any character that doesn't
-  // belong in its position. Position 0: A-F only. Positions 1-4: 0-9 only.
-  inputEl.addEventListener('input', () => {
-    const v = inputEl.value.toUpperCase();
-    let cleaned = '';
-    for (let i = 0; i < v.length && cleaned.length < 5; i++) {
-      const c = v[i];
-      if (cleaned.length === 0) {
-        if (/[A-F]/.test(c)) cleaned += c;
-      } else {
-        if (/[0-9]/.test(c)) cleaned += c;
-      }
+const serialInputEl   = document.getElementById('w-serial');
+const serialKeypadEl  = document.getElementById('w-serial-keypad');
+const serialValueDisplayEl = document.getElementById('skp-value-display');
+const wheelTrackEl    = document.getElementById('serial-wheel-track');
+const letterDisplayEl = document.getElementById('serial-letter-display');
+const digitDisplayEls = [
+  document.getElementById('serial-d1'),
+  document.getElementById('serial-d2'),
+  document.getElementById('serial-d3'),
+  document.getElementById('serial-d4'),
+];
+const modeRollEl   = document.getElementById('skp-mode-roll');
+const modeNumpadEl = document.getElementById('skp-mode-numpad');
+
+// Live state. parseSerialFromHidden() pulls these from whatever's in the
+// hidden input on load (so localStorage restoration "just works").
+let serialLetter = '';
+let serialDigits = '';
+
+function parseSerialFromHidden() {
+  const v = (serialInputEl.value || '').toUpperCase();
+  serialLetter = (v.length >= 1 && /[A-F]/.test(v[0])) ? v[0] : '';
+  serialDigits = '';
+  for (let i = 1; i < v.length && serialDigits.length < 4; i++) {
+    if (/[0-9]/.test(v[i])) serialDigits += v[i];
+  }
+}
+
+function commitSerial() {
+  const composed = serialLetter + serialDigits;
+  if (serialInputEl.value !== composed) {
+    serialInputEl.value = composed;
+    // Fire input event so persistOfficer + RDO display sync downstream.
+    serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  paintSerialWidget();
+}
+
+// Re-paint the widget chips (letter + 4 digit cells) and the keypad header
+// preview from the current state.
+function paintSerialWidget() {
+  // Letter chip
+  if (letterDisplayEl) {
+    letterDisplayEl.textContent = serialLetter || '_';
+    letterDisplayEl.parentElement.classList.toggle('empty', !serialLetter);
+  }
+  // Digit cells
+  digitDisplayEls.forEach((el, i) => {
+    if (!el) return;
+    const ch = serialDigits[i];
+    el.textContent = ch || '_';
+    el.classList.toggle('placeholder', !ch);
+  });
+  // Keypad header preview shows full composed value, or A1234 placeholder.
+  if (serialValueDisplayEl) {
+    const composed = serialLetter + serialDigits;
+    if (composed === '') {
+      serialValueDisplayEl.textContent = 'A1234';
+      serialValueDisplayEl.classList.add('placeholder');
+    } else {
+      // Pad with underscores so the user sees their progress (e.g. "B12__").
+      const padded = (serialLetter || '_') + serialDigits.padEnd(4, '_');
+      serialValueDisplayEl.textContent = padded;
+      serialValueDisplayEl.classList.remove('placeholder');
     }
-    if (inputEl.value !== cleaned) inputEl.value = cleaned;
-    refreshSerialKeypad();
+  }
+  // Numpad button enable/disable: digits should only be tappable if a letter
+  // has been chosen (matching the original "letter first, then numbers" rule).
+  // Backspace + clear are enabled whenever there's any digit to remove or
+  // anything to clear.
+  serialKeypadEl.querySelectorAll('.skp-key.digit').forEach(btn => {
+    btn.disabled = !serialLetter || serialDigits.length >= 4;
+  });
+  serialKeypadEl.querySelectorAll('.skp-key.action').forEach(btn => {
+    btn.disabled = (serialDigits.length === 0 && !serialLetter);
   });
 }
-setupSerialField(document.getElementById('w-serial'));
 
-/* ============================================================
-   MOBILE SERIAL KEYPAD
-   Manages the on-screen keypad that slides up as a bottom sheet whenever the
-   serial input is focused on mobile. Disables the OS keyboard via readOnly so
-   taps go through the keypad rather than the native input. The desktop case
-   (no coarse pointer, wide viewport) leaves the input fully editable and never
-   shows the keypad at all.
-   ============================================================ */
-function isMobileSerialContext() {
-  return window.matchMedia('(pointer: coarse), (max-width: 720px)').matches;
-}
-
-const serialInputEl = document.getElementById('w-serial');
-const serialKeypadEl = document.getElementById('w-serial-keypad');
-const serialValueDisplayEl = document.getElementById('skp-value-display');
-
-// Slide-in/slide-out timer. The bottom sheet uses a small grace period on
-// blur so a tap on a keypad button (which fires blur in some browsers despite
-// our pointerdown.preventDefault) doesn't briefly trigger close-then-reopen.
+// ─── Bottom sheet open / close ─────────────────────────────────
 let keypadHideTimer = null;
 const KEYPAD_HIDE_DELAY_MS = 100;
 
-function openKeypad() {
-  if (!isMobileSerialContext()) return;
+function openKeypad(mode) {
   if (keypadHideTimer) { clearTimeout(keypadHideTimer); keypadHideTimer = null; }
+  setKeypadMode(mode || 'roll');
   serialKeypadEl.classList.add('open');
   serialKeypadEl.setAttribute('aria-hidden', 'false');
 }
@@ -1952,124 +2223,153 @@ function closeKeypad(immediate) {
   else keypadHideTimer = setTimeout(doClose, KEYPAD_HIDE_DELAY_MS);
 }
 
-function refreshSerialKeypad() {
-  // Sync per-row enabled state to the current input value length and content.
-  const v = serialInputEl.value;
-  const hasLetter = v.length >= 1 && /[A-F]/.test(v[0]);
-  const isFull = v.length >= 5;
-
-  // Letter row: disabled once a letter is committed (or full).
-  serialKeypadEl.querySelectorAll('.skp-key.letter').forEach(btn => {
-    const disabled = hasLetter || isFull;
-    btn.disabled = disabled;
-    btn.classList.toggle('active-row', !disabled);
-  });
-  // Digit row: enabled only after the letter is committed and not full.
-  serialKeypadEl.querySelectorAll('.skp-key.digit').forEach(btn => {
-    const disabled = !hasLetter || isFull;
-    btn.disabled = disabled;
-    btn.classList.toggle('active-row', !disabled);
-  });
-  // Action keys: backspace + clear enabled only if there's something to act on.
-  serialKeypadEl.querySelectorAll('.skp-key.action').forEach(btn => {
-    btn.disabled = v.length === 0;
-  });
-
-  // Live value preview in the keypad header.
-  if (serialValueDisplayEl) {
-    if (v === '') {
-      serialValueDisplayEl.textContent = 'A1234';
-      serialValueDisplayEl.classList.add('placeholder');
-    } else {
-      serialValueDisplayEl.textContent = v;
-      serialValueDisplayEl.classList.remove('placeholder');
-    }
+function setKeypadMode(mode) {
+  const showRoll = (mode === 'roll');
+  modeRollEl.hidden = !showRoll;
+  modeNumpadEl.hidden = showRoll;
+  if (showRoll) {
+    // Whenever the roll mode opens, sync the wheel position to the current
+    // letter (or A if unset). Use raf to ensure layout is settled before we
+    // set scrollTop — otherwise the scroll-snap padding hasn't taken effect.
+    requestAnimationFrame(syncWheelToCurrentLetter);
   }
 }
 
-function appendSerialChar(c) {
-  const v = serialInputEl.value;
-  if (v.length >= 5) return;
-  // Position 0 must be A-F; positions 1-4 must be 0-9.
-  if (v.length === 0 && !/[A-F]/.test(c)) return;
-  if (v.length > 0 && !/[0-9]/.test(c)) return;
-  serialInputEl.value = v + c;
-  // Fire input event so the persistOfficer wiring downstream picks it up.
-  serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+// ─── Wheel ────────────────────────────────────────────────────
+let isWheelScrollingProgrammatically = false;
+
+function syncWheelToCurrentLetter() {
+  const idx = Math.max(0, SERIAL_LETTERS.indexOf(serialLetter || 'A'));
+  isWheelScrollingProgrammatically = true;
+  // Use 'instant' so the snap doesn't animate when we're just initializing.
+  wheelTrackEl.scrollTo({ top: idx * WHEEL_ITEM_HEIGHT, behavior: 'instant' });
+  // Some browsers ignore 'instant' — fall through to direct scrollTop.
+  wheelTrackEl.scrollTop = idx * WHEEL_ITEM_HEIGHT;
+  // Clear the programmatic flag after the next frame.
+  setTimeout(() => { isWheelScrollingProgrammatically = false; }, 80);
+  highlightWheelItem(idx);
+}
+
+function highlightWheelItem(idx) {
+  wheelTrackEl.querySelectorAll('.serial-wheel-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === idx);
+  });
+}
+
+// Scroll listener: snap-aware. Read scrollTop, divide by item height, round,
+// take that as the selected letter. Update state if it changed.
+let wheelScrollTimer = null;
+wheelTrackEl.addEventListener('scroll', () => {
+  if (wheelScrollTimer) clearTimeout(wheelScrollTimer);
+  wheelScrollTimer = setTimeout(() => {
+    const idx = Math.round(wheelTrackEl.scrollTop / WHEEL_ITEM_HEIGHT);
+    const clamped = Math.max(0, Math.min(SERIAL_LETTERS.length - 1, idx));
+    highlightWheelItem(clamped);
+    // Don't commit during programmatic scrolls (prevents stale value during init).
+    if (isWheelScrollingProgrammatically) return;
+    const letter = SERIAL_LETTERS[clamped];
+    if (letter !== serialLetter) {
+      serialLetter = letter;
+      commitSerial();
+    }
+  }, 60);
+});
+
+// Tap on a wheel item directly: snap to it.
+wheelTrackEl.querySelectorAll('.serial-wheel-item').forEach((el, i) => {
+  el.addEventListener('click', () => {
+    wheelTrackEl.scrollTo({ top: i * WHEEL_ITEM_HEIGHT, behavior: 'smooth' });
+  });
+});
+
+// ─── Numpad actions ───────────────────────────────────────────
+function appendDigit(c) {
+  if (!serialLetter) {
+    // Shouldn't be reachable since digit keys are disabled, but guard anyway.
+    return;
+  }
+  if (serialDigits.length >= 4) return;
+  if (!/[0-9]/.test(c)) return;
+  serialDigits += c;
+  commitSerial();
 }
 
 function backspaceSerial() {
-  const v = serialInputEl.value;
-  if (v.length === 0) return;
-  serialInputEl.value = v.slice(0, -1);
-  serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  // Backspace removes from the end: digits first (most recent), then letter.
+  if (serialDigits.length > 0) {
+    serialDigits = serialDigits.slice(0, -1);
+  } else if (serialLetter) {
+    serialLetter = '';
+  } else {
+    return;
+  }
+  commitSerial();
 }
 
 function clearSerial() {
-  if (serialInputEl.value === '') return;
-  serialInputEl.value = '';
-  serialInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  if (!serialLetter && !serialDigits) return;
+  serialLetter = '';
+  serialDigits = '';
+  commitSerial();
 }
 
-// Focus / blur drive the slide-in/slide-out. Note that on mobile the input is
-// readOnly so the OS keyboard doesn't appear — but it still receives focus.
-serialInputEl.addEventListener('focus', openKeypad);
-serialInputEl.addEventListener('blur', () => closeKeypad(false));
-
-// Prevent keypad button taps from blurring the input. Without this, on some
-// browsers a tap on a key would steal focus, hiding the keypad mid-tap.
-// pointerdown covers both mouse and touch; we preventDefault before the tap
-// reaches the focus-stealing native behavior.
-serialKeypadEl.addEventListener('pointerdown', e => {
-  if (e.target.closest('.skp-key, .skp-done-btn')) {
-    e.preventDefault();
-    if (keypadHideTimer) { clearTimeout(keypadHideTimer); keypadHideTimer = null; }
+// ─── Wire field-display slot taps + keypad button taps ─────────
+function handleSlotTap(modeRequested) {
+  // If the user is tapping the digits slot but no letter is set, force them
+  // through the roll mode first (matches the "letter first" gating).
+  if (modeRequested === 'numpad' && !serialLetter) modeRequested = 'roll';
+  openKeypad(modeRequested);
+  // Treat opening the roll sheet as the user starting to pick a letter —
+  // commit whatever the wheel is centered on (default A) so the digits side
+  // immediately gets unlocked. The user can still scroll to change.
+  if (modeRequested === 'roll' && !serialLetter) {
+    serialLetter = 'A';
+    commitSerial();
   }
-});
-// Fallback for browsers that don't honor pointerdown.preventDefault for focus.
-serialKeypadEl.addEventListener('mousedown', e => {
-  if (e.target.closest('.skp-key, .skp-done-btn')) e.preventDefault();
-});
+}
 
-// Wire keypad buttons. Done blurs the input which triggers the slide-down.
-serialKeypadEl.querySelectorAll('.skp-key, .skp-done-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
+document.querySelectorAll('.serial-slot').forEach(slot => {
+  slot.addEventListener('click', e => {
     e.preventDefault();
-    if (btn.disabled) return;
-    if (btn.dataset.act === 'done') {
-      // Explicit dismiss — close immediately so there's no slide-up flicker.
-      closeKeypad(true);
-      serialInputEl.blur();
-    } else if (btn.dataset.act === 'bksp') {
-      backspaceSerial();
-    } else if (btn.dataset.act === 'clr') {
-      clearSerial();
-    } else if (btn.dataset.c) {
-      appendSerialChar(btn.dataset.c);
-    }
+    handleSlotTap(slot.dataset.mode);
   });
 });
 
-// On mobile, suppress the OS keyboard entirely — the keypad is the sole input
-// path. On desktop, leave the field fully editable. We re-check on resize so
-// switching between landscape/portrait (or rotating a tablet) flips behavior.
-function applySerialMobileLockout() {
-  if (isMobileSerialContext()) {
-    serialInputEl.readOnly = true;
-    serialInputEl.classList.add('kp-managed');
-    serialInputEl.setAttribute('inputmode', 'none');
-  } else {
-    serialInputEl.readOnly = false;
-    serialInputEl.classList.remove('kp-managed');
-    serialInputEl.setAttribute('inputmode', 'text');
-    // If the viewport became wide while the keypad was open, hide it.
-    closeKeypad(true);
-  }
-}
-applySerialMobileLockout();
-window.addEventListener('resize', applySerialMobileLockout);
+// Mode-switch buttons inside the sheet flip between roll/numpad.
+serialKeypadEl.querySelectorAll('.skp-mode-switch').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    setKeypadMode(btn.dataset.mode);
+  });
+});
 
-refreshSerialKeypad();
+// Numpad keys
+serialKeypadEl.querySelectorAll('.skp-key').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    if (btn.disabled) return;
+    if (btn.dataset.act === 'bksp') backspaceSerial();
+    else if (btn.dataset.act === 'clr') clearSerial();
+    else if (btn.dataset.c) appendDigit(btn.dataset.c);
+  });
+});
+
+// Done button + tap-outside dismissal.
+serialKeypadEl.querySelector('.skp-done-btn').addEventListener('click', e => {
+  e.preventDefault();
+  closeKeypad(true);
+});
+
+document.addEventListener('pointerdown', e => {
+  if (!serialKeypadEl.classList.contains('open')) return;
+  // If the tap is outside the keypad AND outside any serial-slot, dismiss.
+  if (e.target.closest('.serial-keypad') || e.target.closest('.serial-slot')) return;
+  closeKeypad(false);
+});
+
+// ─── Initial paint ────────────────────────────────────────────
+parseSerialFromHidden();
+paintSerialWidget();
 
 function resetWatch() {
   // Keep officer info (name/serial/rank/current watch) since it's now sticky.
@@ -2725,13 +3025,9 @@ function syncRDODisplay() {
   const nameEl = document.getElementById('r-name-display');
   const serialEl = document.getElementById('r-serial-display');
   const watchEl = document.getElementById('r-watch-display');
-  // Compact label for display — full classification names are long enough to
-  // wrap awkwardly in the read-only chip.
-  const rankShort =
-    rank === 'Principal Communications Operator' ? 'Pr. Comm Op' :
-    rank === 'Senior Communications Operator'    ? 'Sr. Comm Op' :
-    rank === 'Communications Information Representative' ? 'CIR' :
-                                                   rank || '—';
+  // The new classification names are already short enough for the read-only
+  // display chip; just show the value as-is, falling back to em-dash if unset.
+  const rankShort = rank || '—';
   if (rankEl)   rankEl.textContent = rankShort;
   if (nameEl)   nameEl.textContent = name || '—';
   if (serialEl) serialEl.textContent = serial ? `#${serial}` : '—';
@@ -2762,9 +3058,10 @@ function wireOfficerSync() {
 applyOfficerToFields();
 wireOfficerSync();
 syncRDODisplay();
-// Keypad state needs an explicit refresh after applyOfficerToFields restores
-// any saved serial — programmatic .value sets don't fire the input handler.
-refreshSerialKeypad();
+// After restoring a saved serial from localStorage, re-derive the widget's
+// letter/digits state from the hidden input and re-paint the chips.
+parseSerialFromHidden();
+paintSerialWidget();
 
 function forgetOfficer() {
   if (!confirm('Clear saved name, serial, classification, and watch from this device?')) return;
@@ -2775,13 +3072,15 @@ function forgetOfficer() {
     if (el.tagName === 'SELECT') {
       const empty = Array.from(el.options).find(o => o.value === '');
       if (empty) el.value = '';
-      else if (id === 'w-rank') el.value = 'Communications Information Representative';
+      else if (id === 'w-rank') el.value = 'Comm Information Rep';
       else el.value = el.options[0].value;
     } else {
       el.value = '';
     }
   });
-  refreshSerialKeypad();
+  // Re-derive widget state from the now-cleared hidden input and re-paint.
+  parseSerialFromHidden();
+  paintSerialWidget();
   toast('Saved dispatcher info cleared');
   syncRDODisplay();
 }
@@ -2831,13 +3130,13 @@ function generateCombinedPDF() {
   const name = document.getElementById('w-name').value.trim();
   const serial = document.getElementById('w-serial').value.trim().toUpperCase();
   const curWatch = document.getElementById('w-curwatch').value || '';
-  const rank = document.getElementById('w-rank').value || 'Communications Information Representative';
+  const rank = document.getElementById('w-rank').value || 'Comm Information Rep';
   // Short label used in filenames and the "Last name, ABBR" prefix on slips.
   // Each dispatch classification gets a compact 2-3 letter abbreviation.
   const rankAbbr =
-    rank === 'Principal Communications Operator' ? 'Pr. CO' :
-    rank === 'Senior Communications Operator'    ? 'Sr. CO' :
-                                                   'CIR';
+    rank === 'Principal Comm Op' ? 'Pr. CO' :
+    rank === 'Sr. Comm Op'       ? 'Sr. CO' :
+                                   'CIR';
   const nameWithRank = `${rankAbbr} ${name}`;
 
   if (!name) return toast('Dispatcher name required', true);
@@ -3236,9 +3535,9 @@ function generateCombinedPDF() {
   const lastName = (name || '').split(',')[0].trim() || 'unsigned';
   // Filename-safe abbreviation per dispatch classification.
   const rankShort =
-    rank === 'Principal Communications Operator' ? 'Pr CO' :
-    rank === 'Senior Communications Operator'    ? 'Sr CO' :
-                                                   'CIR';
+    rank === 'Principal Comm Op' ? 'Pr CO' :
+    rank === 'Sr. Comm Op'       ? 'Sr CO' :
+                                   'CIR';
   const namePart = `${serial || 'X0000'}, ${rankShort} ${lastName}`;
 
   // Format a list of {dp, year} with year stated only after the LAST DP of each
