@@ -187,7 +187,7 @@
        baseline 0.5fr so the dropdown has breathing room around "Watch 1/2/3";
        the corresponding 0.1fr is taken off Name.
        Serial 1fr and Classification 1.5fr: with the short classification
-       names ("Comm Information Rep" etc.) Classification no longer needs
+       names ("Comm Info Rep" etc.) Classification no longer needs
        2fr to fit its longest option. The freed 0.5fr is divvied — half
        stays with Classification (now 1.5fr), half goes to Serial (now 1fr).
        Total = 5fr; the row's right edge then justifies cleanly against the
@@ -199,7 +199,7 @@
     flex-direction: column;
     /* Allow the field to shrink below its content's intrinsic width when
        used inside a CSS Grid track. Without this, a <select> with a long
-       option (e.g. "Comm Information Rep") forces the 1fr grid track to
+       option (e.g. "Comm Info Rep") forces the 1fr grid track to
        be ~200px wide, blowing the card past the mobile viewport edge. */
     min-width: 0;
   }
@@ -1306,7 +1306,7 @@
       <div class="field">
         <label for="w-rank">Classification</label>
         <select id="w-rank">
-          <option value="Comm Information Rep">Comm Information Rep</option>
+          <option value="Comm Info Rep">Comm Info Rep</option>
           <option value="Sr. Comm Op">Sr. Comm Op</option>
           <option value="Principal Comm Op">Principal Comm Op</option>
         </select>
@@ -2495,7 +2495,7 @@ function forgetOfficer() {
     if (el.tagName === 'SELECT') {
       const empty = Array.from(el.options).find(o => o.value === '');
       if (empty) el.value = '';
-      else if (id === 'w-rank') el.value = 'Comm Information Rep';
+      else if (id === 'w-rank') el.value = 'Comm Info Rep';
       else el.value = el.options[0].value;
     } else {
       el.value = '';
@@ -2550,12 +2550,15 @@ function generateCombinedPDF() {
   const name = document.getElementById('w-name').value.trim();
   const serial = document.getElementById('w-serial').value.trim().toUpperCase();
   const curWatch = document.getElementById('w-curwatch').value || '';
-  const rank = document.getElementById('w-rank').value || 'Comm Information Rep';
+  const rank = document.getElementById('w-rank').value || 'Comm Info Rep';
   // Short label used in filenames and the "Last name, ABBR" prefix on slips.
-  // Each dispatch classification gets a compact 2-3 letter abbreviation.
+  // Each dispatch classification gets a compact 3-letter abbreviation:
+  //   Comm Info Rep      → CIR
+  //   Sr. Comm Op        → SCO
+  //   Principal Comm Op  → PCO
   const rankAbbr =
-    rank === 'Principal Comm Op' ? 'Pr. CO' :
-    rank === 'Sr. Comm Op'       ? 'Sr. CO' :
+    rank === 'Principal Comm Op' ? 'PCO' :
+    rank === 'Sr. Comm Op'       ? 'SCO' :
                                    'CIR';
   const nameWithRank = `${rankAbbr} ${name}`;
 
@@ -2955,8 +2958,8 @@ function generateCombinedPDF() {
   const lastName = (name || '').split(',')[0].trim() || 'unsigned';
   // Filename-safe abbreviation per dispatch classification.
   const rankShort =
-    rank === 'Principal Comm Op' ? 'Pr CO' :
-    rank === 'Sr. Comm Op'       ? 'Sr CO' :
+    rank === 'Principal Comm Op' ? 'PCO' :
+    rank === 'Sr. Comm Op'       ? 'SCO' :
                                    'CIR';
   const namePart = `${serial || 'X0000'}, ${rankShort} ${lastName}`;
 
