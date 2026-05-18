@@ -413,6 +413,82 @@
     font-size: 13px;
   }
 
+  /* ===== RDO DP PICKER =====
+     A horizontal scrollable row of buttons, one per DP in the current bid period.
+     Tapping a button selects which DP's calendar is visible — only the active
+     slot panel is shown (the others have display:none via .rdo-slot.active rule
+     below). The active button is enlarged with a navy fill so the user can see
+     at a glance which DP they're editing. */
+  .dp-picker {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Spread the buttons across the full container width with auto-computed
+       gaps. space-between pins the first button to the left edge, the last
+       to the right edge, and distributes equal spacing between the rest.
+       The gap value below is the *minimum* spacing — if items overflow the
+       container (e.g. 7 buttons on a very narrow phone), the layout falls
+       back to the gap and overflows horizontally so the picker scrolls.
+       Result: the row visually spans the same width as the dispatcher info
+       block above it, with the active button (largest) sitting wherever
+       its DP index puts it in the sequence. */
+    justify-content: space-between;
+    gap: 2px;
+    padding: 8px 4px;
+    margin-bottom: 16px;
+    /* Hide ugly default scrollbar but keep scrollability */
+    scrollbar-width: thin;
+  }
+  .dp-picker .dp-btn {
+    flex: 0 0 auto;
+    min-width: 44px;
+    padding: 5px 4px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    text-align: center;
+    font-family: inherit;
+    transition: background-color 0.15s ease, color 0.15s ease, padding 0.15s ease, min-width 0.15s ease;
+    line-height: 1.2;
+  }
+  .dp-picker .dp-btn .dp-btn-label {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+  }
+  .dp-picker .dp-btn .dp-btn-range {
+    font-size: 7.5px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .dp-picker .dp-btn:hover:not(.active) {
+    background: var(--paper-2);
+  }
+  .dp-picker .dp-btn.active {
+    min-width: 58px;
+    padding: 7px 6px;
+    background: var(--navy);
+    border-color: var(--navy);
+    color: var(--paper);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+  .dp-picker .dp-btn.active .dp-btn-label { font-size: 14px; }
+  .dp-picker .dp-btn.active .dp-btn-range {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 8.5px;
+  }
+
+  /* Only the currently-selected slot is visible. All others are display:none
+     to keep the DOM lean without re-rendering on switch. */
+  #rdo-slots .rdo-slot { display: none; }
+  #rdo-slots .rdo-slot.active { display: block; }
+
   /* ===== RDO SLOT PANELS (stacked, one per DP) ===== */
   .rdo-slot {
     border: 1px solid var(--line);
@@ -479,6 +555,38 @@
        Pin the toggle to the left side after the badge; the MOU chip uses
        margin-left: auto to claim the rest of the space. */
     margin-left: 4px;
+  }
+  /* Simple "X of 12 RDOs selected" display in the slot head. Replaces the
+     previous 3-way view toggle since the bid no longer has a 2nd choice. */
+  .rdo-slot-head .stat-rdo-count {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.2;
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    margin-left: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .rdo-slot-head .stat-rdo-count .rdo-count-num {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+  }
+  .rdo-slot-head .stat-rdo-count .rdo-count-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .rdo-slot-head .stat-rdo-count.warn { border-color: var(--gold-bright); }
+  .rdo-slot-head .stat-rdo-count.ok {
+    border-color: #5ec27a;
+    background: rgba(94, 194, 122, 0.10);
   }
   .rdo-slot-head .header-mou-chip {
     /* Pushed toward the right side; sits 15px left of the Apply button (or
@@ -1294,12 +1402,12 @@
              autocapitalize="characters" tells iOS to default to caps. JS in
              the script section enforces position-by-position validation
              (slot 0 must be A–F, slots 1–4 must be 0–9).
-             Default value "B" prefills the most common starting letter for
+             Default value "C" prefills the most common starting letter for
              dispatch serials so users only have to enter the 4 digits. -->
         <input type="text"
                id="w-serial"
-               value="B"
-               placeholder="B1234"
+               value="C"
+               placeholder="C1234"
                maxlength="5"
                autocapitalize="characters"
                autocomplete="off"
@@ -1315,7 +1423,7 @@
         </select>
       </div>
       <div class="field full">
-        <label for="w-startdp">Bid Period (3 DPs)</label>
+        <label for="w-startdp">Bid Period</label>
         <select id="w-startdp"></select>
       </div>
     </div>
@@ -1402,6 +1510,10 @@
       <span class="rdo-officer-edit-hint">Edit on Watch BID</span>
     </div>
 
+    <!-- DP picker: one button per DP in the bid period. Tapping a button
+         shows that DP's RDO calendar; the active button is visually enlarged.
+         Built dynamically from the watch-bid's chosen period. -->
+    <div id="rdo-dp-picker" class="dp-picker"></div>
     <div id="rdo-slots"></div>
 
     <div class="actions">
@@ -1456,52 +1568,69 @@ function fmtDateLong(d) {
    ============================================================ */
 
 // Bid mode: "single" (today's default — pick one watch for the bid period) or
-// "fullYear" (4 watch picks, one per DP group; RDO panel shows all 13 DPs).
+// "fullYear" (2 watch picks, one per half; RDO panel shows all 13 DPs of the bid year).
 // Declared early because several helper functions (updateWatchRange, getRDOStartDP,
 // numDPsInGroup) branch on it.
 let bidMode = 'single';
 function isFullYear() { return bidMode === 'fullYear'; }
 
-// Watch form: group DPs by year as 1-3, 4-6, 7-9, 10-13. The last group of each
-// year contains 4 DPs; all others have 3. Groups never cross a year boundary.
+// Bid system: every year is divided into two halves —
+//   • Half 1: DPs 2-7 of year Y (6 DPs, ~Feb through late July)
+//   • Half 2: DPs 8-13 of year Y followed by DP 1 of year Y+1 (7 DPs,
+//             ~late July through early February of the next calendar year)
+// The boundary between these halves is the only DP transition in a year where
+// the bid period changes. DP 1 of year Y always belongs to "Half 2 of year Y-1"
+// since the bid cycle that includes DP 1 starts in DP 8 of the prior year.
+//
+// For the wrap-around half (half 2), this function uses the sentinel value 14
+// to mean "DP 1 of next year" — the standard DP iteration logic
+//   (curDP > 13 ⇒ curDP -= 13, year += 1)
+// then converts it back to DP=1 at the year boundary. This lets callers do
+//   const [first, last] = dpGroupForYearAndStartDP(dp);
+//   for (let i = 0; i < last - first + 1; i++) { ...curDP = first + i... }
+// without special-casing the wrap.
 function dpGroupForYearAndStartDP(dpNum) {
   // Returns [startDP, endDP] for the group containing dpNum.
-  if (dpNum <= 3) return [1, 3];
-  if (dpNum <= 6) return [4, 6];
-  if (dpNum <= 9) return [7, 9];
-  return [10, 13];
+  if (dpNum >= 2 && dpNum <= 7) return [2, 7];   // Half 1
+  return [8, 14];                                 // Half 2 (and dp=1 → caller picks year-1)
 }
 
 function buildWatchDPOptions(selectEl) {
   selectEl.innerHTML = '';
   const now = new Date();
 
-  // Build a list of all groups across the years we care about: from 1 year before
-  // the anchor through ~4 years after.
+  // The bid system has 2 groups per year:
+  //   • Half 1: DPs 2-7 of year Y
+  //   • Half 2: DPs 8-13 of year Y, plus DP 1 of year Y+1
+  // Build options for several years; filter out groups already past.
   const groups = [];
   const startYear = DP_ANCHOR.year - 1;
   const endYear = DP_ANCHOR.year + 4;
   for (let yr = startYear; yr <= endYear; yr++) {
-    [[1, 3], [4, 6], [7, 9], [10, 13]].forEach(([first, last]) => {
-      const dpsInGroup = [];
-      for (let dp = first; dp <= last; dp++) dpsInGroup.push(getDPInfo(dp, yr));
-      groups.push(dpsInGroup);
-    });
+    // Half 1: DPs 2-7 of yr (all within the same calendar year, no wrap)
+    const h1 = [];
+    for (let d = 2; d <= 7; d++) h1.push(getDPInfo(d, yr));
+    groups.push({ dps: h1, dpLabel: 'DPs 2-7', startDP: 2, year: yr });
+
+    // Half 2: DPs 8-13 of yr followed by DP 1 of yr+1 (wraps year boundary)
+    const h2 = [];
+    for (let d = 8; d <= 13; d++) h2.push(getDPInfo(d, yr));
+    h2.push(getDPInfo(1, yr + 1));
+    groups.push({ dps: h2, dpLabel: 'DPs 8-13, 1', startDP: 8, year: yr });
   }
 
   groups.forEach(g => {
-    // Skip groups whose final DP ended before today.
-    if (g[g.length - 1].end < now) return;
+    // Skip groups whose final DP already ended.
+    if (g.dps[g.dps.length - 1].end < now) return;
     const opt = document.createElement('option');
-    opt.value = `${g[0].dp}-${g[0].year}`;
-    const dpLabel = `DP ${g[0].dp}–${g[g.length - 1].dp}`;
-    opt.textContent = `${dpLabel} • ${g[0].year} (${fmtDate(g[0].start)} – ${fmtDate(g[g.length - 1].end)})`;
+    opt.value = `${g.startDP}-${g.year}`;
+    opt.textContent = `${g.dpLabel} / ${g.year} (${fmtDate(g.dps[0].start)} – ${fmtDate(g.dps[g.dps.length - 1].end)})`;
     selectEl.appendChild(opt);
   });
 
-  // Default: anchor's containing group (DP 7-9 of 2026 currently).
-  const [anchorFirst] = dpGroupForYearAndStartDP(DP_ANCHOR.dp);
-  const defaultVal = `${anchorFirst}-${DP_ANCHOR.year}`;
+  // Default: the group containing the anchor DP (DP 7 of 2026 → half 1).
+  const [defaultFirst] = dpGroupForYearAndStartDP(DP_ANCHOR.dp);
+  const defaultVal = `${defaultFirst}-${DP_ANCHOR.year}`;
   const anchorOpt = Array.from(selectEl.options).find(o => o.value === defaultVal);
   if (anchorOpt) anchorOpt.selected = true;
   else if (selectEl.options.length > 0) selectEl.selectedIndex = 0;
@@ -1554,12 +1683,12 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 const wRangeList = document.getElementById('w-range-list');
 function updateWatchRange() {
   if (isFullYear()) {
-    // In full-year mode the range is implied by the year picker; covers all 13 DPs.
+    // In full-year mode the range is the full bid year cycle: DP 2 of Y through DP 1 of Y+1.
     const yr = +wYearSel.value;
-    const first = getDPInfo(1, yr);
-    const last = getDPInfo(13, yr);
+    const first = getDPInfo(2, yr);
+    const last = getDPInfo(1, yr + 1);
     wRangeList.innerHTML = `${fmtDate(first.start)} through ${fmtDate(last.end)}<br>` +
-      `<span style="font-size:12px;">All 13 DPs of ${yr}</span>`;
+      `<span style="font-size:12px;">Bid year ${yr} — both halves (13 DPs)</span>`;
     return;
   }
   const [dp, yr] = wStartDP.value.split('-').map(Number);
@@ -1586,18 +1715,19 @@ const wYearSel = document.getElementById('w-year');
 function buildYearOptions() {
   wYearSel.innerHTML = '';
   const now = new Date();
-  // Show years whose DP 13 hasn't ended yet (relevant for a forward-looking bid).
+  // Each year option represents a bid year cycle: DP 2 of Y through DP 1 of Y+1.
+  // Show cycles whose final DP (DP 1 of Y+1) hasn't ended yet.
   for (let yr = DP_ANCHOR.year - 1; yr <= DP_ANCHOR.year + 4; yr++) {
-    const last = getDPInfo(13, yr);
+    const last = getDPInfo(1, yr + 1);     // DP 1 of next year (end of bid cycle)
     if (last.end < now) continue;
-    const first = getDPInfo(1, yr);
+    const first = getDPInfo(2, yr);        // DP 2 of yr (start of bid cycle)
     const opt = document.createElement('option');
     opt.value = String(yr);
     opt.textContent = `${yr} — ${fmtDate(first.start)} through ${fmtDate(last.end)}`;
     wYearSel.appendChild(opt);
   }
   if (wYearSel.options.length > 0) {
-    // Default to the year that contains today, falling back to first available.
+    // Default to the cycle that contains today, falling back to first available.
     const todayYear = String(now.getFullYear());
     const match = Array.from(wYearSel.options).find(o => o.value === todayYear);
     if (match) match.selected = true;
@@ -1646,18 +1776,26 @@ bidModeToggle.querySelectorAll('.bm-opt').forEach(btn => {
 const fyWatchGroupsEl = document.getElementById('fy-watch-groups');
 function rebuildFullYearUI() {
   const yr = +wYearSel.value;
-  const groups = [[1, 3], [4, 6], [7, 9], [10, 13]];
+  // Bid year Y = the cycle that starts in DP 2 of Y and ends in DP 1 of Y+1.
+  // Two halves: Half 1 = DPs 2-7 of Y; Half 2 = DPs 8-13 of Y plus DP 1 of Y+1.
+  const groups = [
+    { startDP: 2, endDP: 7,  endYear: yr,     label: 'DPs 2-7'    },
+    { startDP: 8, endDP: 13, endYear: yr,     label: 'DPs 8-13, 1',
+      // Half 2 wraps: the last DP is DP 1 of next year.
+      wrapsToNextYear: true },
+  ];
   fyWatchGroupsEl.innerHTML = '';
-  groups.forEach((range, groupIdx) => {
-    const [first, last] = range;
-    const startInfo = getDPInfo(first, yr);
-    const endInfo = getDPInfo(last, yr);
+  groups.forEach((g, groupIdx) => {
+    const startInfo = getDPInfo(g.startDP, yr);
+    const lastDP = g.wrapsToNextYear ? 1 : g.endDP;
+    const lastYear = g.wrapsToNextYear ? yr + 1 : yr;
+    const endInfo = getDPInfo(lastDP, lastYear);
     const card = document.createElement('div');
     card.className = 'fy-watch-group';
     card.dataset.group = groupIdx;
     card.innerHTML = `
       <div class="fy-head">
-        <span class="fy-title">DPs ${first}–${last}</span>
+        <span class="fy-title">${g.label}</span>
         <span class="fy-range">${fmtDate(startInfo.start)} – ${fmtDate(endInfo.end)}</span>
       </div>
       <div class="watch-options">
@@ -1712,10 +1850,8 @@ function refreshFullYearWatchCard(groupIdx) {
 // State: { c1: <watch# or null>, c2: <watch# or null> } — used in single-period mode.
 const watchState = { c1: null, c2: null };
 
-// Full-year mode state: 4 sets of {c1, c2}, one per DP group (1-3, 4-6, 7-9, 10-13).
+// Full-year mode state: 2 sets of {c1, c2}, one per half (DPs 2-7, then DPs 8-13+1).
 const watchStateGroups = [
-  { c1: null, c2: null },
-  { c1: null, c2: null },
   { c1: null, c2: null },
   { c1: null, c2: null },
 ];
@@ -1930,9 +2066,9 @@ function getRDOStartDP() {
   return { dp, year: yr };
 }
 
-// How many DPs are in the currently-selected bid group? In full-year mode this is
-// always 13. Otherwise it's the size of the year-quarter group (3, except 4 for
-// the year-end DPs 10-13).
+// How many DPs are in the currently-selected bid group? In full-year mode this
+// is always 13 (the bid year cycle). Otherwise it's the size of the half:
+// 6 DPs for Half 1 (DPs 2-7), 7 DPs for Half 2 (DPs 8-13 + DP 1 of next year).
 function numDPsInGroup() {
   if (isFullYear()) return 13;
   const { dp } = getRDOStartDP();
@@ -1968,14 +2104,56 @@ function buildAllSlots() {
   for (let s = 0; s < n; s++) {
     rdoSlotsEl.appendChild(buildSlotPanel(s));
   }
+  buildRDODPPicker();
+  // Default to showing the first DP's calendar; the picker's first button is
+  // marked active and only that slot has display:block.
+  setActiveRDOSlot(0);
+}
+
+// Build the horizontal DP picker shown above the RDO calendar. One button per
+// DP in the current bid period; each button shows "DP {n}" on line 1 and the
+// start/end date range "mm/dd - mm/dd" on line 2. Clicking a button shows
+// that DP's calendar (only one is visible at a time).
+function buildRDODPPicker() {
+  const picker = document.getElementById('rdo-dp-picker');
+  if (!picker) return;
+  picker.innerHTML = '';
+  const n = numDPsInGroup();
+  for (let i = 0; i < n; i++) {
+    const info = getRDOSlotDP(i);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dp-btn';
+    btn.dataset.slot = i;
+    // Compact date format: "M/D-M/D" — no leading zeros, no spaces around the
+    // dash — to fit narrow buttons without horizontal scrolling.
+    const startStr = `${info.start.getMonth() + 1}/${info.start.getDate()}`;
+    const endStr   = `${info.end.getMonth() + 1}/${info.end.getDate()}`;
+    btn.innerHTML = `<div class="dp-btn-label">DP${info.dp}</div><div class="dp-btn-range">${startStr}-${endStr}</div>`;
+    btn.addEventListener('click', () => setActiveRDOSlot(i));
+    picker.appendChild(btn);
+  }
+}
+
+// Switch which DP's calendar is visible. Only one slot panel has the .active
+// class at a time (the rest are display:none via the #rdo-slots .rdo-slot rule).
+function setActiveRDOSlot(idx) {
+  document.querySelectorAll('#rdo-dp-picker .dp-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('#rdo-slots .rdo-slot').forEach((s, i) => {
+    s.classList.toggle('active', i === idx);
+  });
+  // Scroll the active button into view in case the picker is overflowing.
+  const activeBtn = document.querySelector('#rdo-dp-picker .dp-btn.active');
+  if (activeBtn && activeBtn.scrollIntoView) {
+    activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }
 }
 
 function buildSlotPanel(slotIdx) {
   const info = getRDOSlotDP(slotIdx);
   const slot = rdoSlots[slotIdx];
-  // Last slot in the bid group has no DPs below it to apply to, so the Apply
-  // button is omitted entirely.
-  const isLastSlot = slotIdx === numDPsInGroup() - 1;
 
   // Initialize day data for this slot (preserve existing if same DP)
   const desiredFirstDate = info.start.toDateString();
@@ -1998,17 +2176,11 @@ function buildSlotPanel(slotIdx) {
         <span class="slot-dp-num">DP ${info.dp}</span>
         <span class="slot-dp-year">${String(info.year).split('').map(c => `<span>${c}</span>`).join('')}</span>
       </span>
-      <div class="stat stat-view-toggle" title="Click to cycle through RDO views">
-        <div class="toggle-current">
-          <div class="toggle-label"></div>
-          <div class="toggle-count"></div>
-        </div>
-        <div class="toggle-hint"></div>
+      <div class="stat stat-rdo-count" title="RDO selection progress">
+        <span class="rdo-count-num">0 of 12</span>
+        <span class="rdo-count-label">RDOs selected</span>
       </div>
       <div class="header-mou-chip" title="MOU 03/20 Paid Holiday — denoted by $ on calendar"><span class="swatch holiday">$</span><span class="mou-text">MOU 03/20<br>Paid Holiday</span></div>
-      ${isLastSlot
-        ? '<span class="apply-all-btn apply-all-spacer" aria-hidden="true">Apply to all DPs</span>'
-        : `<button type="button" class="apply-all-btn" data-slot="${slotIdx}" title="Copy this DP's selections to all DPs below it" disabled>Apply to all DPs</button>`}
     </div>
     <div class="rdo-slot-body">
       <div class="calendar">
@@ -2023,22 +2195,8 @@ function buildSlotPanel(slotIdx) {
     </div>
   `;
 
-  // Wire RDO counters as view targets.
-  // Single stat toggle: clicking cycles 1st → 2nd → both → 1st. The label text and
-  // class change with each click. The label says: "X/12 RDO (1st)" / "X/12 RDO (2nd)" /
-  // "X/12 + Y/12 RDO (Both)" depending on the current view.
-  const toggleEl = slotEl.querySelector('.stat-view-toggle');
-  if (toggleEl) {
-    toggleEl.addEventListener('click', () => {
-      const cur = slot.view;
-      const next = cur === '1' ? '2' : cur === '2' ? 'both' : '1';
-      slot.view = next;
-      updateStats(slotIdx);
-      applyViewClass(slotIdx);
-    });
-  }
-
-  // Initial paint
+  // No view toggle anymore — RDO bid now has 1st choice only, locked in.
+  // Initial paint of the count display.
   setTimeout(() => updateStats(slotIdx), 0);
 
   // Build day cells
@@ -2112,45 +2270,8 @@ function buildSlotPanel(slotIdx) {
     calendar.appendChild(cell);
   });
 
-  // Wire up the "Apply to all DPs" button: copies this slot's selections to all
-  // other slots, respecting the slot's current view (1st choice / 2nd choice / both).
-  const applyAllBtn = slotEl.querySelector('.apply-all-btn');
-  if (applyAllBtn) {
-    applyAllBtn.addEventListener('click', () => {
-      // Safeguard: respect the disabled state set by updateStats() which gates
-      // execution on whether RDO counts are in a valid state (0 or 12 only).
-      if (applyAllBtn.disabled) return;
-      const sourceSlot = rdoSlots[slotIdx];
-      const view = sourceSlot.view; // '1', '2', or 'both'
-      // Snapshot the source's day-by-day states so the copy stays consistent if
-      // the user has the calendar mid-paint.
-      const sourceStates = sourceSlot.days.map(d => ({ state1: d.state1, state2: d.state2 }));
-      let copiedCount = 0;
-      // Copy ONLY to slots BELOW (DPs after) the source slot — not above. So
-      // applying from DP 8 affects DPs 9, 10, ... but never DPs 1-7.
-      for (let i = slotIdx + 1; i < rdoSlots.length; i++) {
-        const target = rdoSlots[i];
-        for (let j = 0; j < target.days.length && j < sourceStates.length; j++) {
-          if (view === '1') {
-            target.days[j].state1 = sourceStates[j].state1;
-          } else if (view === '2') {
-            target.days[j].state2 = sourceStates[j].state2;
-          } else { // 'both'
-            target.days[j].state1 = sourceStates[j].state1;
-            target.days[j].state2 = sourceStates[j].state2;
-          }
-        }
-        copiedCount++;
-      }
-      // Refresh all slot UIs to reflect the new state.
-      rdoSlots.forEach((_, i) => {
-        rdoSlots[i].days.forEach((_, j) => refreshDayCell(i, j));
-        updateStats(i);
-      });
-      const label = view === '1' ? '1st choice' : view === '2' ? '2nd choice' : 'both choices';
-      toast(`Applied DP ${getRDOSlotDP(slotIdx).dp} ${label} to ${copiedCount} subsequent DP${copiedCount === 1 ? '' : 's'}`);
-    });
-  }
+  // No "Apply to all DPs" button — RDO bid now shows one DP at a time, so
+  // the "apply this DP's selections to all DPs below" concept no longer fits.
 
   // Apply view class & paint after a microtask so the element exists in DOM
   setTimeout(() => {
@@ -2321,63 +2442,16 @@ function updateStats(slotIdx) {
   const slot = rdoSlots[slotIdx];
   const days = slot.days;
   const o1 = days.filter(d => d.state1 === 'rdo').length;
-  const o2 = days.filter(d => d.state2 === 'rdo').length;
-  const view = slot.view;
 
-  const toggle = slotEl.querySelector('.stat-view-toggle');
-  if (!toggle) return;
-  const labelEl = toggle.querySelector('.toggle-label');
-  const countEl = toggle.querySelector('.toggle-count');
-  const hintEl = toggle.querySelector('.toggle-hint');
-
-  // Style accents reflect the active view.
-  toggle.classList.remove('warn', 'ok', 'view-1', 'view-2', 'view-both');
-
-  // The "Choice" word always appears as a 2-line block: ordinal on top, "Choice"
-  // below, both centered. Renders as an inline-block so it can sit inline with
-  // surrounding text (e.g. "Click for [block]" or "X of 12 RDOs selected [block]")
-  // and still occupy 2 lines.
-  const block1 = '<span class="choice-block">1<sup>st</sup><br>Choice</span>';
-  const block2 = '<span class="choice-block">2<sup>nd</sup><br>Choice</span>';
-  const blockBoth = '<span class="choice-block">1<sup>st</sup> &amp; 2<sup>nd</sup><br>Choice</span>';
-
-  if (view === '1') {
-    labelEl.innerHTML = block1;
-    countEl.innerHTML = `${o1} of 12 RDOs selected`;
-    hintEl.innerHTML = `Click for ${block2}`;
-    toggle.classList.add('view-1');
-    toggle.classList.toggle('warn', o1 !== 0 && o1 !== 12);
-    toggle.classList.toggle('ok', o1 === 12);
-  } else if (view === '2') {
-    labelEl.innerHTML = block2;
-    countEl.innerHTML = `${o2} of 12 RDOs selected`;
-    hintEl.innerHTML = `Click for ${blockBoth}`;
-    toggle.classList.add('view-2');
-    toggle.classList.toggle('warn', o2 !== 0 && o2 !== 12);
-    toggle.classList.toggle('ok', o2 === 12);
-  } else {
-    labelEl.innerHTML = blockBoth;
-    countEl.innerHTML =
-      `${o1} of 12 RDOs (1<sup>st</sup>)<br>` +
-      `${o2} of 12 RDOs (2<sup>nd</sup>)`;
-    hintEl.innerHTML = `Click for ${block1}`;
-    toggle.classList.add('view-both');
-    const allOk = o1 === 12 && o2 === 12;
-    const anyWarn = (o1 !== 0 && o1 !== 12) || (o2 !== 0 && o2 !== 12);
-    toggle.classList.toggle('ok', allOk);
-    toggle.classList.toggle('warn', anyWarn);
-  }
-
-  // Apply-to-all gating: only allow the button when this slot's RDO counts are
-  // in a "valid" state — exactly 0 or 12 in each of 1st/2nd choice. Anything in
-  // between (e.g. 7 RDOs in 1st) is mid-edit and shouldn't be propagated.
-  const applyBtn = slotEl.querySelector('.apply-all-btn');
-  if (applyBtn) {
-    const valid = (o1 === 0 || o1 === 12) && (o2 === 0 || o2 === 12);
-    applyBtn.disabled = !valid;
-    applyBtn.title = valid
-      ? "Copy this DP's selections to all DPs below it"
-      : 'Set RDO counts to 0 or 12 in each choice before applying to other DPs';
+  // Update the simple count display in the slot head.
+  const countEl = slotEl.querySelector('.stat-rdo-count');
+  if (countEl) {
+    const numEl = countEl.querySelector('.rdo-count-num');
+    if (numEl) numEl.textContent = `${o1} of 12`;
+    // Visual state: green when exactly 12, amber if mid-edit, gray default.
+    countEl.classList.remove('warn', 'ok');
+    if (o1 === 12) countEl.classList.add('ok');
+    else if (o1 > 0) countEl.classList.add('warn');
   }
 }
 
@@ -2501,8 +2575,8 @@ function forgetOfficer() {
       else if (id === 'w-rank') el.value = 'Comm Info Rep';
       else el.value = el.options[0].value;
     } else if (id === 'w-serial') {
-      // Match the page-load default: "B" is the common starting letter.
-      el.value = 'B';
+      // Match the page-load default: "C" is the common starting letter.
+      el.value = 'C';
     } else {
       el.value = '';
     }
@@ -2592,10 +2666,13 @@ function generateCombinedPDF() {
     }
   }
 
-  // Determine the DPs in the selected group (single mode) or full year (fullYear mode).
+  // Determine the DPs in the selected group (single mode) or full bid year (fullYear mode).
+  // For full-year mode, "bid year Y" means the cycle starting DP 2 of Y and
+  // ending at DP 1 of Y+1 (13 DPs total). The first DP of the calendar year
+  // (DP 1) actually belongs to the previous bid year and is not included.
   let dpStart, yrStart;
   if (isFullYear()) {
-    dpStart = 1;
+    dpStart = 2;
     yrStart = +wYearSel.value;
   } else {
     [dpStart, yrStart] = wStartDP.value.split('-').map(Number);
@@ -2727,10 +2804,12 @@ function generateCombinedPDF() {
       return arr;
     });
     // Layout differs by group size:
-    //  • 3-DP groups: 3 date rows + 1 dedicated label row (4 total rows). Label
-    //    row letters render in light gray.
-    //  • 4-DP groups: 3 date rows + 1 hybrid row (DP4 dates merged with the
+    //  • 3-DP groups (legacy): 3 date rows + 1 dedicated label row (4 total rows).
+    //    Label row letters render in light gray.
+    //  • 4-DP groups (legacy): 3 date rows + 1 hybrid row (DP4 dates merged with the
     //    WATCH BID label letters). Total still 4 rows.
+    //  • 6-DP groups (Half 1, new): 6 date rows + 1 dedicated label row.
+    //  • 7-DP groups (Half 2, new): 7 date rows + 1 dedicated label row.
     let dateRows, dateRowLabels, markRows, shadedMarkRowIdxs;
     if (groupDPs.length === 4) {
       dateRows = allDateRows;
@@ -2759,29 +2838,78 @@ function generateCombinedPDF() {
     });
   };
 
+  // Compute the watch slip's height as a function of its DP count.
+  // The slip layout consumes: 28pt of borders+padding + 85pt of fixed top
+  // sections + 8pt of legend reserve + 13pt per row. For 3-DP chunks the
+  // WATCH BID label takes a separate row → 4 rows total. For 4-DP chunks
+  // the WATCH BID label is overlaid on the 4th date row → still 4 rows.
+  // Both fit the original 173pt FORM_H_WATCH baseline exactly.
+  function watchSlipHeightForDPs(numDPs) {
+    const rowCount = numDPs === 4 ? 4 : numDPs + 1;
+    return Math.max(173, 28 + 85 + 8 + rowCount * 13);
+  }
+
+  // Split a bid period's DPs into per-sheet chunks of 3 (or 4 at the end).
+  // Each chunk becomes its own Watch BID slip. For 6-DP halves: [3, 3].
+  // For 7-DP halves: [3, 4] — the 4-DP chunk reuses the existing overlay
+  // layout where the 4th DP's dates share the row with the "WATCH BID"
+  // watermark label, so the sheet template doesn't grow. For legacy 3-DP
+  // and 4-DP bid sizes, returns the input as a single chunk.
+  function chunkDPsForWatchBid(allDPs) {
+    const chunks = [];
+    if (allDPs.length <= 4) return [allDPs];
+    let i = 0;
+    while (i < allDPs.length) {
+      const remaining = allDPs.length - i;
+      if (remaining === 4) {
+        chunks.push(allDPs.slice(i, i + 4));
+        i += 4;
+      } else if (remaining <= 3) {
+        chunks.push(allDPs.slice(i, i + remaining));
+        i += remaining;
+      } else {
+        chunks.push(allDPs.slice(i, i + 3));
+        i += 3;
+      }
+    }
+    return chunks;
+  }
+
   if (isFullYear()) {
-    // FULL-YEAR MODE: page 1 has 4 Watch BID mini-slips (one per DP group).
-    // RDO pages: each DP gets its own page.
+    // FULL-YEAR MODE: page 1 has 2 Watch BID mini-slips (one per half).
+    // The 13 DPs of the bid year are already ordered in `dps`: indexes 0..5
+    // are Half 1 (DPs 2-7), indexes 6..12 are Half 2 (DPs 8-13 + DP 1 of next year).
+    // Each half is further chunked into 3-DP (and possibly 4-DP) sheets so
+    // each Watch BID slip stays at the compact 173pt height.
     if (hasWatchBid || isEmptyBid) {
-      // Group DPs into the four year-quarter groups: 1-3, 4-6, 7-9, 10-13.
-      const groupRanges = [[1, 3], [4, 6], [7, 9], [10, 13]];
-      groupRanges.forEach((range, groupIdx) => {
-        const [first, last] = range;
-        const groupDPs = dps.filter(info => info.dp >= first && info.dp <= last);
+      const halfRanges = [
+        { start: 0, end: 5  }, // Half 1: 6 DPs → [3, 3]
+        { start: 6, end: 12 }, // Half 2: 7 DPs → [3, 4]
+      ];
+      halfRanges.forEach((range, groupIdx) => {
+        const groupDPs = dps.slice(range.start, range.end + 1);
         const gState = watchStateGroups[groupIdx];
         const c1 = gState.c1 != null ? `Watch ${gState.c1}` : '';
         const c2 = gState.c2 != null ? `Watch ${gState.c2}` : '';
-        addSlip(FORM_H_WATCH, (slipY) => {
-          drawWatchBidSlip(slipY, FORM_H_WATCH, groupDPs, c1, c2);
-        }, false, true);
+        chunkDPsForWatchBid(groupDPs).forEach(chunk => {
+          const watchH = watchSlipHeightForDPs(chunk.length);
+          addSlip(watchH, (slipY) => {
+            drawWatchBidSlip(slipY, watchH, chunk, c1, c2);
+          }, false, true);
+        });
       });
     }
   } else {
-    // SINGLE-PERIOD MODE: one Watch BID slip covering all DPs in the chosen group.
+    // SINGLE-PERIOD MODE: chunk the chosen bid period's DPs into per-sheet
+    // groups of 3 (or 4 at the end). 6-DP halves produce 2 sheets [3, 3];
+    // 7-DP halves produce 2 sheets [3, 4]; legacy 3-DP groups produce 1 sheet.
     if (hasWatchBid || isEmptyBid) {
-      addSlip(FORM_H_WATCH, (slipY) => {
-        drawWatchBidSlip(slipY, FORM_H_WATCH, dps, watch1, watch2);
-      }, false, true);
+      chunkDPsForWatchBid(dps).forEach(chunk => {
+        const watchH = watchSlipHeightForDPs(chunk.length);
+        addSlip(watchH, (slipY) => {
+          drawWatchBidSlip(slipY, watchH, chunk, watch1, watch2);
+        }, false, true);
+      });
     }
   }
 
@@ -3124,11 +3252,28 @@ function drawAPD086(doc, y, h, data) {
   const choiceH = 19;
   const choiceGap = 3;
   const headerRowH = 11; // day-of-week header
-  const dateRowH = 13;
-  const markRowH = 13;
 
   const nDateRows = data.dateRows.length;
   const nMarkRows = data.markRows.length;
+
+  // Date + mark row height: dynamic. The slip's content area has fixed-height
+  // sections at the top (title/officer/subtitle/choice/DOW header = ~85pt) and
+  // reserves a small strip for the optional bottom legend. Whatever's left is
+  // split equally among (nDateRows + nMarkRows) rows. The result is capped at
+  // the original 13pt (so 3-DP bids look unchanged) and floored at 8pt (below
+  // which text starts colliding).
+  //
+  // 3-DP bid (3 date + 1 mark row = 4 rows): ~21pt each → capped to 13pt.
+  // 6-DP bid (6 date + 1 mark = 7 rows): ~11-12pt each.
+  // 7-DP bid (7 date + 1 mark = 8 rows): ~10pt each.
+  const fixedTopH = titleH + officerH + subtitleH + choiceH + choiceGap + headerRowH;
+  const legendReserve = data.showLegend ? 8 : 0;
+  const availForRows = (contentBottomY - contentTopY) - fixedTopH - legendReserve;
+  const totalRows = nDateRows + nMarkRows;
+  const computedRowH = totalRows > 0 ? Math.floor(availForRows / totalRows) : 13;
+  const rowH = Math.min(13, Math.max(8, computedRowH));
+  const dateRowH = rowH;
+  const markRowH = rowH;
 
   // Title (2 stacked centered lines), vertically centered in the title block.
   doc.setTextColor(0, 0, 0);
