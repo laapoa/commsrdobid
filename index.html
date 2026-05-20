@@ -1203,24 +1203,85 @@
     border-top: 1px solid var(--line);
   }
 
+  /* Mobile-only actions layout: 2-column grid.
+     Row 1: Scheduler (left) + Generate PDF (right)
+     Row 2: empty (left) + CLEAR (right, under Generate)
+     The Scheduler button only shows on mobile (display:none on desktop via
+     the earlier media query), so on desktop the grid placement rules below
+     are irrelevant — desktop falls back to the flex layout above with
+     [CLEAR] [GENERATE PDF] right-aligned. */
+  @media (max-width: 720px) {
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-areas:
+        "scheduler generate"
+        ".         clear";
+      gap: 12px;
+      justify-content: stretch;
+    }
+    .actions .btn-scheduler { grid-area: scheduler; justify-self: start; }
+    .actions #w-submit,
+    .actions .btn.primary  { grid-area: generate;  justify-self: stretch; }
+    .actions .btn-clear    { grid-area: clear;     justify-self: stretch; }
+  }
+
+  /* CLEAR button — replaces the legacy "Forget My Info" + "Reset" pair.
+     A single tap/click runs reset; right-click (desktop) or long-press
+     (mobile, ~600ms) triggers forget-my-info. The visual cue is just the
+     CLEAR label — the multi-mode behavior is documented in its title
+     tooltip and via the confirmation modals that fire from either path. */
+  .btn-clear {
+    /* The default ghost button styling is fine; we just need touch-action
+       guidance to make long-press not get hijacked by the browser. */
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Confirmation modal — bigger, bolder, more prominent than the scheduler
+     email modal. Used for destructive actions (reset selections, forget
+     dispatcher info) that the user needs to acknowledge with a click rather
+     than a fleeting toast. Larger title font, more padding around the body
+     text, and beefier buttons make it impossible to miss. */
+  .modal-card.confirm-card {
+    max-width: 460px;
+    padding: 32px 32px 28px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.40);
+    border: 2px solid var(--navy);
+  }
+  .modal-card.confirm-card h3 {
+    font-size: 26px;
+    margin-bottom: 16px;
+  }
+  .modal-card.confirm-card p {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--ink);
+    margin-bottom: 24px;
+  }
+  .modal-card.confirm-card .modal-actions .btn {
+    padding: 12px 24px;
+    font-size: 14px;
+  }
+
   /* Scheduler's Email button with status dot.
      The dot color signals whether a scheduler email address is currently
      saved: gray = vacant (none set), green = present (an email is saved
      in localStorage and will be added to the recipient list when a PDF is
      generated). The dot sits inline at the right edge of the button text.
-     Layout: pinned to the LEFT margin of the .actions row via margin-right:
-     auto, while the other action buttons (Reset, Generate PDF, etc.) stay
-     right-aligned. The pill-shaped 45px border-radius distinguishes it
-     visually from the squared-off regular ghost buttons. */
+     Layout: positioned by the .actions grid layout (mobile-only). The
+     pill-shaped 45px border-radius distinguishes it visually from the
+     squared-off regular ghost buttons. */
   .btn-scheduler {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     border-radius: 45px;
-    margin-right: auto;
   }
-  /* Mobile-only feature — hide the Scheduler's Email button on desktop.
-     The auto-attach / mailto share flow only works from a mobile mail
+  /* Mobile-only feature — hide the Scheduler button on desktop. The
+     auto-attach / mailto share flow only works from a mobile mail
      client, so there's no point offering the affordance on a desktop
      browser where users will just download the PDF and email it
      manually anyway. The modal stays in the DOM (no harm), but the
@@ -1583,12 +1644,15 @@
     </div>
 
     <div class="actions">
-      <button class="btn ghost" type="button" onclick="forgetOfficer()">Forget My Info</button>
       <button class="btn ghost btn-scheduler" type="button" onclick="openSchedulerEmailModal()">
-        Scheduler's Email <span class="status-dot" aria-hidden="true"></span>
+        Scheduler <span class="status-dot" aria-hidden="true"></span>
       </button>
-      <button class="btn ghost" type="button" onclick="resetWatch()">Reset</button>
       <button class="btn primary" type="button" id="w-submit" onclick="generateWatchPDF()">Generate PDF</button>
+      <button class="btn ghost btn-clear" type="button"
+              data-form="watch"
+              onclick="clearTap('watch')"
+              oncontextmenu="event.preventDefault(); clearForget();"
+              title="Tap to reset current selections · Right-click or long-press to forget saved info">CLEAR</button>
     </div>
   </section>
 
@@ -1624,11 +1688,15 @@
     <div id="rdo-slots"></div>
 
     <div class="actions">
-      <button class="btn ghost" type="button" onclick="resetRDO()">Reset All Days</button>
       <button class="btn ghost btn-scheduler" type="button" onclick="openSchedulerEmailModal()">
-        Scheduler's Email <span class="status-dot" aria-hidden="true"></span>
+        Scheduler <span class="status-dot" aria-hidden="true"></span>
       </button>
       <button class="btn primary" type="button" onclick="generateRDOPDF()">Generate PDF</button>
+      <button class="btn ghost btn-clear" type="button"
+              data-form="rdo"
+              onclick="clearTap('rdo')"
+              oncontextmenu="event.preventDefault(); clearForget();"
+              title="Tap to reset current day selections · Right-click or long-press to forget saved info">CLEAR</button>
     </div>
   </section>
 
@@ -1655,6 +1723,23 @@
       <button class="btn ghost" type="button" onclick="closeSchedulerEmailModal()">Cancel</button>
       <button class="btn ghost" type="button" onclick="clearSchedulerEmail()">Clear</button>
       <button class="btn primary" type="button" onclick="saveSchedulerEmail()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONFIRMATION MODAL =====
+     Larger, more prominent than the scheduler modal — used for destructive
+     actions like CLEAR (reset selections) and the long-press / right-click
+     "forget my info" action. The user must click OK or Cancel to dismiss
+     it (no auto-close, no backdrop dismiss). The h3 title, body text, and
+     primary button label are set dynamically via showConfirm(). -->
+<div class="modal-overlay hidden" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+  <div class="modal-card confirm-card">
+    <h3 id="confirm-modal-title">Confirm</h3>
+    <p id="confirm-modal-body">Are you sure?</p>
+    <div class="modal-actions">
+      <button class="btn ghost" type="button" onclick="closeConfirmModal(false)">Cancel</button>
+      <button class="btn primary" id="confirm-modal-ok" type="button" onclick="closeConfirmModal(true)">OK</button>
     </div>
   </div>
 </div>
@@ -2789,6 +2874,79 @@ function refreshSchedulerButtonStatus() {
       : 'No scheduler email set — click to add';
   });
 }
+
+// ============================================================
+// CONFIRMATION MODAL — a larger, more prominent modal than the toast for
+// actions the user has to explicitly acknowledge. Used by the CLEAR
+// button's tap (reset selections) and right-click / long-press (forget
+// dispatcher info) paths. Pass a title, body, primary-button label, and
+// a callback to fire if the user confirms.
+// ============================================================
+let _pendingConfirm = null;
+function showConfirm(title, body, okText, onConfirm) {
+  const m = document.getElementById('confirm-modal');
+  if (!m) { if (onConfirm) onConfirm(); return; }
+  document.getElementById('confirm-modal-title').textContent = title;
+  document.getElementById('confirm-modal-body').textContent = body;
+  document.getElementById('confirm-modal-ok').textContent = okText || 'OK';
+  _pendingConfirm = onConfirm || null;
+  m.classList.remove('hidden');
+}
+function closeConfirmModal(confirmed) {
+  const m = document.getElementById('confirm-modal');
+  if (m) m.classList.add('hidden');
+  const cb = _pendingConfirm;
+  _pendingConfirm = null;
+  if (confirmed && cb) cb();
+}
+
+// ============================================================
+// CLEAR BUTTON — replaces the old "Reset" and "Forget My Info" pair.
+//   • Tap / click            → reset current selections (per form)
+//   • Right-click (desktop)  → forget saved dispatcher info
+//   • Long-press (mobile)    → forget saved dispatcher info
+// Both paths route through showConfirm() so the user has to acknowledge
+// the destructive action via the large confirmation modal — no silent
+// data loss. Long-press is detected on touchstart/touchend with a 600ms
+// threshold (standard Android/iOS long-press timing).
+// ============================================================
+function clearTap(form) {
+  // Triggered by a normal tap/click on the CLEAR button. If a long-press
+  // already fired forget, suppress the synthesized click that follows.
+  if (_longPressFired) { _longPressFired = false; return; }
+  const message = form === 'rdo'
+    ? 'Reset all RDO day selections in the currently-displayed DP? Your saved dispatcher info (name, serial, watch, classification) and scheduler email will be kept.'
+    : 'Reset the current watch-bid selection? Your saved dispatcher info (name, serial, watch, classification) and scheduler email will be kept.';
+  showConfirm('Reset Selections', message, 'Reset', () => {
+    if (form === 'rdo') resetRDO();
+    else resetWatch();
+  });
+}
+function clearForget() {
+  showConfirm(
+    'Forget My Info',
+    'Permanently delete the saved dispatcher info (name, serial, watch, classification) stored in this browser? Your current selections and saved scheduler email will not be affected.',
+    'Forget',
+    () => { forgetOfficer(); }
+  );
+}
+
+// Long-press detection for the CLEAR button on touch devices. We attach
+// listeners once on DOMContentLoaded (below) — they look up live elements
+// each time so they survive any reflow.
+let _longPressTimer = null;
+let _longPressFired = false;
+const LONG_PRESS_MS = 600;
+function _onClearTouchStart(e) {
+  _longPressFired = false;
+  clearTimeout(_longPressTimer);
+  _longPressTimer = setTimeout(() => {
+    _longPressFired = true;
+    clearForget();
+  }, LONG_PRESS_MS);
+}
+function _onClearTouchEnd() { clearTimeout(_longPressTimer); }
+function _onClearTouchMove() { clearTimeout(_longPressTimer); }
 // Initial paint on load + close-on-backdrop-click wiring.
 document.addEventListener('DOMContentLoaded', () => {
   // One-time migration: earlier versions of this form stored the saved email
@@ -2815,10 +2973,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === modal) closeSchedulerEmailModal();
     });
   }
-  // Close on Escape key.
+  // Wire long-press detection on every CLEAR button (Watch + RDO action rows).
+  document.querySelectorAll('.btn-clear').forEach(btn => {
+    btn.addEventListener('touchstart', _onClearTouchStart, { passive: true });
+    btn.addEventListener('touchend',   _onClearTouchEnd,   { passive: true });
+    btn.addEventListener('touchcancel',_onClearTouchEnd,   { passive: true });
+    btn.addEventListener('touchmove',  _onClearTouchMove,  { passive: true });
+  });
+  // Close confirm modal on Escape (and the scheduler modal too).
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
-      closeSchedulerEmailModal();
+    if (e.key === 'Escape') {
+      const sched = document.getElementById('scheduler-modal');
+      if (sched && !sched.classList.contains('hidden')) closeSchedulerEmailModal();
+      const conf  = document.getElementById('confirm-modal');
+      if (conf && !conf.classList.contains('hidden')) closeConfirmModal(false);
     }
   });
 });
