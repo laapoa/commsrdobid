@@ -1202,6 +1202,110 @@
     padding-top: 24px;
     border-top: 1px solid var(--line);
   }
+
+  /* Scheduler's Email button with status dot.
+     The dot color signals whether a scheduler email address is currently
+     saved: gray = vacant (none set), green = present (an email is saved
+     in localStorage and will be added to the recipient list when a PDF is
+     generated). The dot sits inline at the right edge of the button text.
+     Layout: pinned to the LEFT margin of the .actions row via margin-right:
+     auto, while the other action buttons (Reset, Generate PDF, etc.) stay
+     right-aligned. The pill-shaped 45px border-radius distinguishes it
+     visually from the squared-off regular ghost buttons. */
+  .btn-scheduler {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 45px;
+    margin-right: auto;
+  }
+  /* Mobile-only feature — hide the Scheduler's Email button on desktop.
+     The auto-attach / mailto share flow only works from a mobile mail
+     client, so there's no point offering the affordance on a desktop
+     browser where users will just download the PDF and email it
+     manually anyway. The modal stays in the DOM (no harm), but the
+     entry point is gone. Threshold matches the form's existing
+     mobile breakpoint. */
+  @media (min-width: 721px) {
+    .actions .btn-scheduler { display: none; }
+  }
+  .btn-scheduler .status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--ink-soft);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+    flex: 0 0 auto;
+  }
+  .btn-scheduler.has-email .status-dot {
+    background: #5ec27a; /* green = present */
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.20), 0 0 0 2px rgba(94,194,122,0.18);
+  }
+
+  /* Generic modal overlay for the scheduler email dialog. Sits above
+     everything else with a translucent backdrop; the inner card is fixed
+     at a comfortable reading width and centered on the viewport. */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 22, 41, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9000;
+    padding: 20px;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.30);
+    max-width: 440px;
+    width: 100%;
+    padding: 24px;
+    font-family: 'Inter', sans-serif;
+  }
+  .modal-card h3 {
+    margin: 0 0 12px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: 0.04em;
+  }
+  .modal-card p {
+    margin: 0 0 18px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+  .modal-card input[type="email"] {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: 'Inter', sans-serif;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-sizing: border-box;
+    background: white;
+    color: var(--ink);
+    margin-bottom: 18px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .modal-actions .btn {
+    /* Compact buttons inside the modal — no need for the giant Generate-PDF
+       padding here. */
+    padding: 10px 18px;
+    font-size: 13px;
+  }
   .btn {
     padding: 12px 28px;
     font-family: 'Oswald', sans-serif;
@@ -1480,6 +1584,9 @@
 
     <div class="actions">
       <button class="btn ghost" type="button" onclick="forgetOfficer()">Forget My Info</button>
+      <button class="btn ghost btn-scheduler" type="button" onclick="openSchedulerEmailModal()">
+        Scheduler's Email <span class="status-dot" aria-hidden="true"></span>
+      </button>
       <button class="btn ghost" type="button" onclick="resetWatch()">Reset</button>
       <button class="btn primary" type="button" id="w-submit" onclick="generateWatchPDF()">Generate PDF</button>
     </div>
@@ -1518,6 +1625,9 @@
 
     <div class="actions">
       <button class="btn ghost" type="button" onclick="resetRDO()">Reset All Days</button>
+      <button class="btn ghost btn-scheduler" type="button" onclick="openSchedulerEmailModal()">
+        Scheduler's Email <span class="status-dot" aria-hidden="true"></span>
+      </button>
       <button class="btn primary" type="button" onclick="generateRDOPDF()">Generate PDF</button>
     </div>
   </section>
@@ -1525,6 +1635,29 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ===== SCHEDULER'S EMAIL MODAL =====
+     Opens via the "Scheduler's Email" action button on either bid page. Lets
+     the dispatcher save their scheduler's email address to localStorage so
+     the bid PDF gets auto-attached and sent to that address whenever they
+     generate it. With no email saved, the form just generates a downloadable
+     PDF and the dispatcher emails it manually.
+     The button on the page has a status dot that turns green when an email
+     is saved (refreshed on page load and after every save/clear).
+     The saved email persists across browser sessions (days, weeks, etc.)
+     until the user explicitly clears it via the Clear button in this modal. -->
+<div class="modal-overlay hidden" id="scheduler-modal" role="dialog" aria-modal="true" aria-labelledby="scheduler-modal-title">
+  <div class="modal-card">
+    <h3 id="scheduler-modal-title">Scheduler's Email</h3>
+    <p>Enter the email address where your bid PDF should be sent. Leave blank to skip auto-send and only generate a downloadable PDF for manual handling.</p>
+    <input type="email" id="scheduler-email-input" placeholder="name@example.com" autocomplete="email" inputmode="email">
+    <div class="modal-actions">
+      <button class="btn ghost" type="button" onclick="closeSchedulerEmailModal()">Cancel</button>
+      <button class="btn ghost" type="button" onclick="clearSchedulerEmail()">Clear</button>
+      <button class="btn primary" type="button" onclick="saveSchedulerEmail()">Save</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -1599,40 +1732,51 @@ function buildWatchDPOptions(selectEl) {
   selectEl.innerHTML = '';
   const now = new Date();
 
-  // The bid system has 2 groups per year:
+  // Build a wide pool of candidate periods across multiple years, then slice
+  // a sliding window of 6 around "now": 1 past + current + 4 future periods
+  // (where "future" means strictly after the current period). The default
+  // selection is the period that actually contains today's date (or the
+  // next upcoming one if today falls between periods).
   //   • Half 1: DPs 2-7 of year Y
-  //   • Half 2: DPs 8-13 of year Y, plus DP 1 of year Y+1
-  // Build options for several years; filter out groups already past.
-  const groups = [];
-  const startYear = DP_ANCHOR.year - 1;
-  const endYear = DP_ANCHOR.year + 4;
-  for (let yr = startYear; yr <= endYear; yr++) {
-    // Half 1: DPs 2-7 of yr (all within the same calendar year, no wrap)
+  //   • Half 2: DPs 8-13 of year Y plus DP 1 of year Y+1
+  const all = [];
+  for (let yr = DP_ANCHOR.year - 4; yr <= DP_ANCHOR.year + 6; yr++) {
     const h1 = [];
     for (let d = 2; d <= 7; d++) h1.push(getDPInfo(d, yr));
-    groups.push({ dps: h1, dpLabel: 'DPs 2-7', startDP: 2, year: yr });
-
-    // Half 2: DPs 8-13 of yr followed by DP 1 of yr+1 (wraps year boundary)
+    all.push({ dps: h1, dpLabel: 'DPs 2-7', startDP: 2, year: yr });
     const h2 = [];
     for (let d = 8; d <= 13; d++) h2.push(getDPInfo(d, yr));
     h2.push(getDPInfo(1, yr + 1));
-    groups.push({ dps: h2, dpLabel: 'DPs 8-13, 1', startDP: 8, year: yr });
+    all.push({ dps: h2, dpLabel: 'DPs 8-13, 1', startDP: 8, year: yr });
+  }
+  // Sort by start date (already in order from the year loop, but be defensive).
+  all.sort((a, b) => a.dps[0].start - b.dps[0].start);
+
+  // Find the period containing today; fall back to the next upcoming if today
+  // sits in a gap (shouldn't happen with contiguous halves, but be safe).
+  let currentIdx = all.findIndex(g => g.dps[0].start <= now && now <= g.dps[g.dps.length - 1].end);
+  if (currentIdx === -1) {
+    currentIdx = all.findIndex(g => g.dps[0].start > now);
+    if (currentIdx === -1) currentIdx = all.length - 1;
   }
 
-  groups.forEach(g => {
-    // Skip groups whose final DP already ended.
-    if (g.dps[g.dps.length - 1].end < now) return;
+  // Window of 6: 1 fully-past + current + 4 future periods after current.
+  const startIdx = Math.max(0, currentIdx - 1);
+  const endIdx = Math.min(all.length, currentIdx + 5);
+  const window = all.slice(startIdx, endIdx);
+
+  window.forEach(g => {
     const opt = document.createElement('option');
     opt.value = `${g.startDP}-${g.year}`;
     opt.textContent = `${g.dpLabel} / ${g.year} (${fmtDate(g.dps[0].start)} – ${fmtDate(g.dps[g.dps.length - 1].end)})`;
     selectEl.appendChild(opt);
   });
 
-  // Default: the group containing the anchor DP (DP 7 of 2026 → half 1).
-  const [defaultFirst] = dpGroupForYearAndStartDP(DP_ANCHOR.dp);
-  const defaultVal = `${defaultFirst}-${DP_ANCHOR.year}`;
-  const anchorOpt = Array.from(selectEl.options).find(o => o.value === defaultVal);
-  if (anchorOpt) anchorOpt.selected = true;
+  // Default to the period containing today.
+  const currentPeriod = all[currentIdx];
+  const defaultVal = `${currentPeriod.startDP}-${currentPeriod.year}`;
+  const matchOpt = Array.from(selectEl.options).find(o => o.value === defaultVal);
+  if (matchOpt) matchOpt.selected = true;
   else if (selectEl.options.length > 0) selectEl.selectedIndex = 0;
 }
 
@@ -2584,6 +2728,100 @@ function forgetOfficer() {
   toast('Saved dispatcher info cleared');
   syncRDODisplay();
 }
+
+// ============================================================
+// SCHEDULER'S EMAIL — saved per-dispatcher in localStorage. Used as the
+// sole recipient of generated PDFs: the bid is auto-attached and sent to
+// this address on mobile (via the share sheet or mailto fallback). With
+// no email saved, the form skips the email handoff and just downloads
+// the PDF for manual sending. The "Scheduler's Email" button in the
+// actions row displays a colored status dot: gray when no email is
+// saved, green when one is set.
+// ============================================================
+const SCHEDULER_EMAIL_KEY = 'lawa-dispatch-bid-scheduler-email-v1';
+function getSchedulerEmail() {
+  try { return (localStorage.getItem(SCHEDULER_EMAIL_KEY) || '').trim(); }
+  catch (e) { return ''; }
+}
+function openSchedulerEmailModal() {
+  const modal = document.getElementById('scheduler-modal');
+  const input = document.getElementById('scheduler-email-input');
+  if (!modal || !input) return;
+  input.value = getSchedulerEmail();
+  modal.classList.remove('hidden');
+  setTimeout(() => input.focus(), 50);
+}
+function closeSchedulerEmailModal() {
+  const modal = document.getElementById('scheduler-modal');
+  if (modal) modal.classList.add('hidden');
+}
+function saveSchedulerEmail() {
+  const input = document.getElementById('scheduler-email-input');
+  if (!input) return;
+  const email = input.value.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    toast('Please enter a valid email address');
+    return;
+  }
+  try {
+    if (email) localStorage.setItem(SCHEDULER_EMAIL_KEY, email);
+    else localStorage.removeItem(SCHEDULER_EMAIL_KEY);
+  } catch (e) {}
+  refreshSchedulerButtonStatus();
+  closeSchedulerEmailModal();
+  toast(email ? 'Scheduler email saved' : 'Scheduler email cleared');
+}
+function clearSchedulerEmail() {
+  try { localStorage.removeItem(SCHEDULER_EMAIL_KEY); } catch (e) {}
+  const input = document.getElementById('scheduler-email-input');
+  if (input) input.value = '';
+  refreshSchedulerButtonStatus();
+}
+// Update the status-dot color on every .btn-scheduler button (there's one
+// on each bid form), plus refresh tooltip with the saved address.
+function refreshSchedulerButtonStatus() {
+  const email = getSchedulerEmail();
+  const has = !!email;
+  document.querySelectorAll('.btn-scheduler').forEach(btn => {
+    btn.classList.toggle('has-email', has);
+    btn.title = has
+      ? `Scheduler: ${email} — click to edit`
+      : 'No scheduler email set — click to add';
+  });
+}
+// Initial paint on load + close-on-backdrop-click wiring.
+document.addEventListener('DOMContentLoaded', () => {
+  // One-time migration: earlier versions of this form stored the saved email
+  // under a "supervisor-email" key. If a value is present there and the new
+  // "scheduler-email" key is empty, copy it over and delete the old key so
+  // existing saved emails persist across the rename without the user having
+  // to re-enter them. This runs once per browser since the old key is
+  // removed after a successful migration.
+  try {
+    const OLD_KEY = 'lawa-dispatch-bid-supervisor-email-v1';
+    const NEW_KEY = 'lawa-dispatch-bid-scheduler-email-v1';
+    const oldVal = localStorage.getItem(OLD_KEY);
+    if (oldVal && !localStorage.getItem(NEW_KEY)) {
+      localStorage.setItem(NEW_KEY, oldVal);
+    }
+    if (oldVal !== null) localStorage.removeItem(OLD_KEY);
+  } catch (e) { /* localStorage unavailable — ignore */ }
+
+  refreshSchedulerButtonStatus();
+  const modal = document.getElementById('scheduler-modal');
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      // Click on the backdrop (not on the inner card) closes the modal.
+      if (e.target === modal) closeSchedulerEmailModal();
+    });
+  }
+  // Close on Escape key.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+      closeSchedulerEmailModal();
+    }
+  });
+});
 const toastEl = document.getElementById('toast');
 function toast(msg, isError) {
   toastEl.textContent = msg;
@@ -2988,9 +3226,13 @@ function generateCombinedPDF() {
   });
   const hasAnyRDO = rdoDPs.length > 0;
 
-  // Build recipient list. Dispatch sends every bid (Watch + RDO) to a single
-  // mailbox — no per-watch routing, no separate vacation address.
-  const recipients = ['APDCommunicationPrincipals@lawa.org'];
+  // Build the recipient list. The only recipient is the scheduler email
+  // the user has saved via the Scheduler's Email button — no hardcoded
+  // addresses. If no scheduler email is saved, the recipient list is
+  // empty and shareOrFallbackPDF falls through to its download-only
+  // branch (which also surfaces a toast hinting at how to enable auto-send).
+  const schedulerEmail = getSchedulerEmail();
+  const recipients = schedulerEmail ? [schedulerEmail] : [];
 
   // ---- Pass 2: fixed-position layout. Each slip's Y is determined by its
   // pageSlotIdx according to the schedule pageTopY + pageSlotIdx * SLOT_PITCH.
@@ -3168,11 +3410,17 @@ function generateCombinedPDF() {
 }
 
 // Email handoff strategy:
-//   • Mobile (Web Share API with file support) → share sheet with PDF attached;
-//     recipient is passed via `text` field. If the user cancels, we still open mailto
-//     so they get the recipient pre-filled in the To: field.
-//   • Desktop (no file-share support) → just download the PDF locally. No mailto,
-//     no email prep — the officer attaches and addresses manually from their mail app.
+//   • Mobile (Web Share API with file support) AND a scheduler email is saved
+//     → share sheet with PDF attached so the user can pick their mail client
+//     for auto-attachment + send. The scheduler is in the recipient list. If
+//     the user cancels the share sheet, fall through to mailto so they still
+//     get the recipient pre-filled in the To: field.
+//   • Mobile WITHOUT a scheduler email saved → skip the share/mailto entirely.
+//     Just download the PDF and show a toast explaining why no email was sent.
+//     The user can save a Scheduler's Email via the button to enable auto-send
+//     on the next bid.
+//   • Desktop (no file-share support, scheduler button hidden anyway) → just
+//     download the PDF locally. The officer attaches and addresses manually.
 async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
   const blob = doc.output('blob');
   const file = new File([blob], filename, { type: 'application/pdf' });
@@ -3182,6 +3430,15 @@ async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
   // dialogs that mishandle file attachments — producing "no_name" errors when sent
   // to mail clients. Restricting to true mobile UAs avoids this.
   const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const scheduler = getSchedulerEmail();
+
+  // Mobile + no scheduler email → skip auto-send entirely; just download
+  // and surface a hint that the user can enable auto-send by saving an email.
+  if (isMobile && !scheduler) {
+    doc.save(filename);
+    toast('No scheduler email set — PDF generated only. Add one via the Scheduler\u2019s Email button to enable auto-send.');
+    return;
+  }
 
   if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
@@ -3190,7 +3447,7 @@ async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
         title: subject,
         text: `To: ${recipients.join(', ')}\n\n${body}`
       });
-      toast('PDF ready to send');
+      toast('PDF ready to send — select your email client');
       return;
     } catch (err) {
       // User cancelled the share sheet OR an error — fall through to mailto so they
