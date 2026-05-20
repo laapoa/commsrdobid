@@ -3554,41 +3554,119 @@ function generateCombinedPDF() {
     return;
   }
 
-  // Build filename + email subject using the same year-only-at-end format.
-  //   Watch bid:    "99395, Sgt Dear, Watch Bid for DPs 7, 8, 9-2026.pdf"
-  //   RDO 1 DP:     "99395, Sgt Dear, RDO Bid for DP 7-2026.pdf"
-  //   RDO 2 DPs:    "99395, Sgt Dear, RDO Bid for DPs 7, 8-2026.pdf"
-  //   Year cross:   "99395, Sgt Dear, Watch Bid for DPs 13-2026, 1, 2-2027.pdf"
-  //   Full year:    "99395, Sgt Dear, Full Year Watch & RDO Bid - 2027.pdf"
-  let bidPart;
+  // Build filename + email subject. The filename uses the verbose
+  // "ampersand-and-comma" DP list so individual DPs are readable when
+  // a dispatcher browses their downloads folder. The subject uses a
+  // more compact range format ("DPs 2-7 / 2026") since email-app
+  // subject lines truncate aggressively on mobile.
+  //   Filename:   "C9090, SCO Dear, Watch Bid for DPs 2, 3, 4, 5, 6 & 7-2026.pdf"
+  //   Subject:    "C9090, SCO Dear, Watch Bid for DPs 2-7 / 2026"
+  //   RDO 1 DP:   "C9090, SCO Dear, RDOs for DP 5 / 2026"
+  //   RDO 2 DPs:  "C9090, SCO Dear, RDOs for DPs 5 & 6 / 2026"
+  //   Year cross: "C9090, SCO Dear, Watch Bid for DPs 8-13, 1 / 2026"
+  //   Full year:  "C9090, SCO Dear, Full Year Watch & RDO Bid - 2027"
+  //
+  // Compact subject format: collapses contiguous DPs into a "first-last"
+  // range and only states the year(s) once at the end.
+  const formatDPGroupsCompact = (list) => {
+    if (list.length === 0) return '';
+    // Group consecutive DPs into runs (within the same year, dp-by-dp contiguous).
+    const runs = []; // each: { dps: [...], year }
+    list.forEach(item => {
+      const last = runs[runs.length - 1];
+      const isContig = last && last.year === item.year && item.dp === last.dps[last.dps.length - 1] + 1;
+      if (isContig) last.dps.push(item.dp);
+      else runs.push({ dps: [item.dp], year: item.year });
+    });
+    // Within a run: "5" / "5 & 6" / "5-7" (3+ contiguous collapses to range).
+    const joinRunDPs = (dps) => {
+      if (dps.length === 1) return String(dps[0]);
+      if (dps.length === 2) return `${dps[0]} & ${dps[1]}`;
+      return `${dps[0]}-${dps[dps.length - 1]}`;
+    };
+    return runs.map(r => `${joinRunDPs(r.dps)}-${r.year}`).join(', ');
+  };
+  // Build a subject-friendly "DPs X / YYYY" suffix (slash separator + spaces).
+  const subjectRange = (list) => {
+    // Collapse all of `list` to a single year run if they're all the same year;
+    // otherwise use the compact format that includes per-run years.
+    if (list.length === 0) return '';
+    const allSameYear = list.every(x => x.year === list[0].year);
+    if (allSameYear) {
+      const onlyDPs = list.map(x => x.dp);
+      const joined =
+        onlyDPs.length === 1 ? String(onlyDPs[0]) :
+        onlyDPs.length === 2 ? `${onlyDPs[0]} & ${onlyDPs[1]}` :
+        // Are they contiguous?
+        (onlyDPs.every((v, i) => i === 0 || v === onlyDPs[i - 1] + 1)
+          ? `${onlyDPs[0]}-${onlyDPs[onlyDPs.length - 1]}`
+          : onlyDPs.join(', '));
+      return `${joined} / ${list[0].year}`;
+    }
+    return formatDPGroupsCompact(list);
+  };
+
+  let bidPart, subjectBid, bodyBid;
   if (isFullYear()) {
-    bidPart = hasAnyRDO ? `Full Year Watch & RDO Bid - ${yrStart}` : `Full Year Watch Bid - ${yrStart}`;
+    bidPart    = hasAnyRDO ? `Full Year Watch & RDO Bid - ${yrStart}` : `Full Year Watch Bid - ${yrStart}`;
+    subjectBid = bidPart;
+    bodyBid    = bidPart;
   } else if (hasAnyRDO) {
-    bidPart = `RDO Bid for ${dpPrefix(rdoDPs)} ${formatDPGroups(rdoDPs)}`;
+    bidPart    = `RDO Bid for ${dpPrefix(rdoDPs)} ${formatDPGroups(rdoDPs)}`;
+    subjectBid = `RDOs for ${dpPrefix(rdoDPs)} ${subjectRange(rdoDPs)}`;
+    bodyBid    = `RDO Bid for ${dpPrefix(rdoDPs)} ${subjectRange(rdoDPs)}`;
   } else {
     const allThree = dps.map(d => ({ dp: d.dp, year: d.year }));
-    bidPart = `Watch Bid for ${dpPrefix(allThree)} ${formatDPGroups(allThree)}`;
+    bidPart    = `Watch Bid for ${dpPrefix(allThree)} ${formatDPGroups(allThree)}`;
+    subjectBid = `Watch Bid for ${dpPrefix(allThree)} ${subjectRange(allThree)}`;
+    bodyBid    = `Watch Assignment Bid for ${dpPrefix(allThree)} ${subjectRange(allThree)}`;
   }
   const filename = `${namePart}, ${bidPart}.pdf`;
-  const subject = `${namePart}, ${bidPart}`;
+  const subject  = `${namePart}, ${subjectBid}`;
 
-  const body = `Submitting my Watch / Days-Off Bid for the period DP ${dps[0].dp}–${dps[dps.length - 1].dp} (${fmtMDDYYYY(dps[0].start)} – ${fmtMDDYYYY(dps[dps.length - 1].end)}).\n\nForm attached.`;
+  // Body text — what shows up in the email body. The first line is the
+  // scheduler email address by itself (no "To:" prefix) and padded with
+  // leading whitespace to appear roughly centered on a mobile-mail line.
+  // Stripping the prefix means the user can long-press the line, iOS will
+  // auto-select the email substring, tap Copy, then long-press into the
+  // real To: field and Paste — getting the bare address with no extra
+  // text to delete. (The Web Share API can't reliably pre-fill recipients
+  // in any browser; see comments on shareOrFallbackPDF below.)
+  const scheduler = getSchedulerEmail();
+  const padToCenter = (s, width) => {
+    const pad = Math.max(0, Math.floor((width - s.length) / 2));
+    return ' '.repeat(pad) + s;
+  };
+  // Width tuned to roughly center on iPhone Mail and Gmail mobile in
+  // portrait — those clients render plain-text body in a fixed-width
+  // font around 40-50 chars wide.
+  const emailLine = scheduler ? `${padToCenter(scheduler, 50)}\n\n` : '';
+  // Date range in body matches the subject's scope: for RDO bids that's
+  // the DP(s) actually marked off; for watch bids it's the whole period.
+  const rangeDPs = (hasAnyRDO && !isFullYear())
+    ? dps.filter(d => rdoDPs.some(r => r.dp === d.dp && r.year === d.year))
+    : dps;
+  const body = `${emailLine}Submitting my ${bodyBid} (${fmtMDDYYYY(rangeDPs[0].start)} – ${fmtMDDYYYY(rangeDPs[rangeDPs.length - 1].end)}).\nPlease see attached.`;
 
   shareOrFallbackPDF(doc, filename, recipients, subject, body);
 }
 
 // Email handoff strategy:
-//   • Mobile (Web Share API with file support) AND a scheduler email is saved
-//     → share sheet with PDF attached so the user can pick their mail client
-//     for auto-attachment + send. The scheduler is in the recipient list. If
-//     the user cancels the share sheet, fall through to mailto so they still
-//     get the recipient pre-filled in the To: field.
-//   • Mobile WITHOUT a scheduler email saved → skip the share/mailto entirely.
-//     Just download the PDF and show a toast explaining why no email was sent.
-//     The user can save a Scheduler's Email via the button to enable auto-send
-//     on the next bid.
-//   • Desktop (no file-share support, scheduler button hidden anyway) → just
-//     download the PDF locally. The officer attaches and addresses manually.
+//   • Mobile + a scheduler email saved + Web Share API with file support:
+//     -> Copy the scheduler email to the clipboard FIRST (so the user can
+//        long-press → Paste into the To: field in their mail app),
+//        then trigger Web Share with the PDF attached and the subject set
+//        via `title`. The body opens with a prominent "To: <email>" line
+//        as a backup hint. Result: PDF auto-attaches ✓, subject populates ✓,
+//        recipient field is one paste away ✓. The Web Share API has no
+//        recipients field in any browser, so the clipboard workaround is
+//        the closest we can get to full pre-population.
+//   • Mobile + scheduler set + share unavailable: fall back to mailto:
+//     which DOES pre-fill recipient + subject + body (but can't attach
+//     files), and concurrently download the PDF for manual attachment.
+//   • Mobile + NO scheduler saved: skip email handoff entirely; just
+//     download the PDF + surface a toast hinting how to enable auto-send.
+//   • Desktop: just download (the Scheduler button is hidden anyway).
 async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
   const blob = doc.output('blob');
   const file = new File([blob], filename, { type: 'application/pdf' });
@@ -3604,23 +3682,37 @@ async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
   // and surface a hint that the user can enable auto-send by saving an email.
   if (isMobile && !scheduler) {
     doc.save(filename);
-    toast('No scheduler email set — PDF generated only. Add one via the Scheduler\u2019s Email button to enable auto-send.');
+    toast('No scheduler email set — PDF generated only. Add one via the Scheduler button to enable auto-send.');
     return;
   }
 
-  if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+  if (isMobile && scheduler && navigator.canShare && navigator.canShare({ files: [file] })) {
+    // Pre-copy the scheduler email to the clipboard. When the user picks
+    // Mail / Gmail from the share sheet, their mail app opens with the PDF
+    // attached + subject set, and the recipient is one long-press → Paste
+    // away in the To: field.
+    let clipboardOk = false;
+    try {
+      await navigator.clipboard.writeText(scheduler);
+      clipboardOk = true;
+    } catch (e) { /* clipboard write may fail in some contexts — non-fatal */ }
+
     try {
       await navigator.share({
         files: [file],
         title: subject,
-        text: `To: ${recipients.join(', ')}\n\n${body}`
+        text: body,
       });
-      toast('PDF ready to send — select your email client');
+      toast(
+        clipboardOk
+          ? `PDF sent — scheduler email copied; paste it into the To: field`
+          : `PDF sent — paste ${scheduler} into the To: field`
+      );
       return;
     } catch (err) {
       // User cancelled the share sheet OR an error — fall through to mailto so they
       // still get the recipient pre-filled in To:.
-      const mailto = `mailto:${encodeURIComponent(recipients.join(','))}` +
+      const mailto = `mailto:${encodeURIComponent(scheduler)}` +
         `?subject=${encodeURIComponent(subject)}` +
         `&body=${encodeURIComponent(body + `\n\n(Please attach the downloaded ${filename})`)}`;
       window.location.href = mailto;
@@ -3630,8 +3722,20 @@ async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
     }
   }
 
-  // Desktop (or any non-mobile context) → just download the PDF. The officer handles
-  // emailing themselves.
+  // Mobile + scheduler set but Web Share API/files not supported (older browsers):
+  // Use mailto:. Recipient + subject + body pre-fill; user manually attaches the
+  // downloaded PDF.
+  if (isMobile && scheduler) {
+    const mailto = `mailto:${encodeURIComponent(scheduler)}` +
+      `?subject=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(body + `\n\n(Please attach the downloaded ${filename})`)}`;
+    window.location.href = mailto;
+    setTimeout(() => { doc.save(filename); }, 200);
+    toast('PDF downloading — attach it to the email');
+    return;
+  }
+
+  // Desktop (or any non-mobile context) → just download the PDF.
   doc.save(filename);
   toast('PDF downloaded');
 }
