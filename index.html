@@ -1264,6 +1264,78 @@
     padding: 12px 24px;
     font-size: 14px;
   }
+  /* Don't-show-again checkbox row inside the scheduler-prompt modal. Sits
+     between the body paragraph and the action buttons. The full-row label
+     is clickable (large tap target on mobile) so the user doesn't have to
+     hit the tiny native checkbox itself. */
+  .modal-card .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0 20px;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .modal-card .checkbox-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    accent-color: var(--navy);
+  }
+
+  /* "about" link pinned to the very bottom of the page, on the cream
+     background outside the form card. Deliberately understated: all
+     lowercase, slightly transparent ink-soft color, no underline until
+     hover. Centered horizontally and given enough top/bottom margin
+     that it never crowds the form on any viewport. */
+  .about-link-wrap {
+    text-align: center;
+    margin: 32px 0 40px;
+  }
+  .about-link {
+    background: none;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    text-transform: lowercase;
+    letter-spacing: 0.03em;
+    color: var(--ink-soft);
+    opacity: 0.65;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+  .about-link:hover {
+    opacity: 1;
+    color: var(--navy);
+    text-decoration: underline;
+  }
+
+  /* About modal — uses the same big confirm-card chrome as the other
+     modals, but the body has more text so we relax the typography
+     (slightly tighter line-height to keep the card from getting tall)
+     and add a list-styled "Your data" section. */
+  .modal-card.about-card {
+    max-width: 520px;
+  }
+  .modal-card.about-card p { margin-bottom: 14px; }
+  .modal-card.about-card .about-list {
+    margin: 6px 0 18px;
+    padding-left: 22px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  .modal-card.about-card .about-list li { margin-bottom: 8px; }
+  .modal-card.about-card code {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background: var(--paper-2);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
 
   /* Scheduler's Email button with status dot.
      The dot color signals whether a scheduler email address is currently
@@ -1593,18 +1665,6 @@
       </div>
     </div>
 
-    <!-- BID MODE TOGGLE: single period vs full year -->
-    <div class="bid-mode-toggle" id="bid-mode-toggle" role="tablist" aria-label="Bid mode">
-      <button type="button" class="bm-opt active" data-mode="single" role="tab" aria-selected="true">Single Period</button>
-      <button type="button" class="bm-opt" data-mode="fullYear" role="tab" aria-selected="false">Full Year</button>
-    </div>
-
-    <!-- Full-year mode: year picker (only DP 1 of selected year) -->
-    <div class="field full" id="w-year-wrap" style="display:none; margin-top: 8px;">
-      <label for="w-year">Year</label>
-      <select id="w-year"></select>
-    </div>
-
     <div class="dp-range" id="w-range">
       <strong>Bid Period:</strong>
       <div class="dp-range-list" id="w-range-list">—</div>
@@ -1630,12 +1690,6 @@
           <div class="w-status">— Not Selected —</div>
         </div>
       </div>
-    </div>
-
-    <!-- Full-year watch pickers (4 cards, one per DP group) -->
-    <div id="watch-fullyear" style="display:none;">
-      <label style="display:block; margin-bottom: 10px;">Requested Watch Assignment per DP Group</label>
-      <div class="fy-watch-groups" id="fy-watch-groups"><!-- populated by JS --></div>
     </div>
 
     <div class="field full" style="margin-top: 24px;">
@@ -1744,6 +1798,30 @@
   </div>
 </div>
 
+<!-- ===== SCHEDULER PROMPT MODAL =====
+     Fires when the user taps Generate PDF on mobile without having saved
+     a scheduler email. Asks whether they want to add an email now (for
+     auto-attach + send) or just download the PDF this time. Has a
+     "Don't show this message again" checkbox; when checked, future
+     Generate PDF taps with an empty scheduler skip this modal and just
+     download. The skip preference is cleared by Forget My Info so the
+     prompt returns after a full reset. -->
+<div class="modal-overlay hidden" id="scheduler-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="scheduler-prompt-title">
+  <div class="modal-card confirm-card">
+    <h3 id="scheduler-prompt-title">No Scheduler Email Saved</h3>
+    <p>Without a scheduler email, the form will generate a downloadable PDF that you can email manually. Would you like to add a scheduler email now to auto-attach and send?</p>
+    <label class="checkbox-row">
+      <input type="checkbox" id="prompt-dont-show-again">
+      <span>Don't show this message again</span>
+    </label>
+    <div class="modal-actions">
+      <button class="btn ghost"  type="button" onclick="closeSchedulerPromptModal()">Cancel</button>
+      <button class="btn ghost"  type="button" onclick="onPromptJustDownload()">Just Download</button>
+      <button class="btn primary" type="button" onclick="onPromptAddEmail()">Add Email</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    DP CALENDAR
@@ -1785,12 +1863,14 @@ function fmtDateLong(d) {
    POPULATE DP DROPDOWNS
    ============================================================ */
 
-// Bid mode: "single" (today's default — pick one watch for the bid period) or
-// "fullYear" (2 watch picks, one per half; RDO panel shows all 13 DPs of the bid year).
-// Declared early because several helper functions (updateWatchRange, getRDOStartDP,
-// numDPsInGroup) branch on it.
+// Bid mode: legacy code supported a "fullYear" mode that put 2 watch picks
+// (one per half) and a 13-DP RDO panel on one page. That UI was removed —
+// dispatchers always bid one half-year at a time now — but the conditional
+// `if (isFullYear())` branches scattered through the code stay in place
+// (they're dead code now). `bidMode` is hard-locked to 'single' and
+// `isFullYear()` always returns false, so those branches never execute.
 let bidMode = 'single';
-function isFullYear() { return bidMode === 'fullYear'; }
+function isFullYear() { return false; }
 
 // Bid system: every year is divided into two halves —
 //   • Half 1: DPs 2-7 of year Y (6 DPs, ~Feb through late July)
@@ -1938,137 +2018,16 @@ wStartDP.addEventListener('change', updateWatchRange);
 updateWatchRange();
 
 /* ============================================================
-   FULL-YEAR YEAR PICKER + BID MODE TOGGLE
+   FULL-YEAR mode REMOVED. The toggle UI and year-picker were taken
+   out — dispatchers always bid one half-year at a time now. The
+   conditional `if (isFullYear())` branches scattered through this
+   script are dead code (isFullYear() always returns false) but kept
+   in place for now in case the feature is ever re-enabled. The
+   top-level DOM wiring that used to live here (year-picker element,
+   bid-mode toggle, full-year watch picker cards) is gone because the
+   referenced elements no longer exist in the HTML — it would throw
+   on page load.
    ============================================================ */
-const wYearSel = document.getElementById('w-year');
-function buildYearOptions() {
-  wYearSel.innerHTML = '';
-  const now = new Date();
-  // Each year option represents a bid year cycle: DP 2 of Y through DP 1 of Y+1.
-  // Show cycles whose final DP (DP 1 of Y+1) hasn't ended yet.
-  for (let yr = DP_ANCHOR.year - 1; yr <= DP_ANCHOR.year + 4; yr++) {
-    const last = getDPInfo(1, yr + 1);     // DP 1 of next year (end of bid cycle)
-    if (last.end < now) continue;
-    const first = getDPInfo(2, yr);        // DP 2 of yr (start of bid cycle)
-    const opt = document.createElement('option');
-    opt.value = String(yr);
-    opt.textContent = `${yr} — ${fmtDate(first.start)} through ${fmtDate(last.end)}`;
-    wYearSel.appendChild(opt);
-  }
-  if (wYearSel.options.length > 0) {
-    // Default to the cycle that contains today, falling back to first available.
-    const todayYear = String(now.getFullYear());
-    const match = Array.from(wYearSel.options).find(o => o.value === todayYear);
-    if (match) match.selected = true;
-  }
-}
-buildYearOptions();
-wYearSel.addEventListener('change', () => {
-  updateWatchRange();
-  rebuildFullYearUI();
-  buildAllSlots();
-});
-
-const bidModeToggle = document.getElementById('bid-mode-toggle');
-const wYearWrap = document.getElementById('w-year-wrap');
-const wStartDPWrap = wStartDP.closest('.field');
-const watchSingleWrap = document.getElementById('watch-single');
-const watchFullYearWrap = document.getElementById('watch-fullyear');
-
-function setBidMode(mode) {
-  bidMode = mode;
-  bidModeToggle.querySelectorAll('.bm-opt').forEach(b => {
-    const isActive = b.dataset.mode === mode;
-    b.classList.toggle('active', isActive);
-    b.setAttribute('aria-selected', isActive ? 'true' : 'false');
-  });
-  if (mode === 'fullYear') {
-    wStartDPWrap.style.display = 'none';
-    wYearWrap.style.display = '';
-    watchSingleWrap.style.display = 'none';
-    watchFullYearWrap.style.display = '';
-    rebuildFullYearUI();
-  } else {
-    wStartDPWrap.style.display = '';
-    wYearWrap.style.display = 'none';
-    watchSingleWrap.style.display = '';
-    watchFullYearWrap.style.display = 'none';
-  }
-  updateWatchRange();
-  buildAllSlots();
-}
-bidModeToggle.querySelectorAll('.bm-opt').forEach(btn => {
-  btn.addEventListener('click', () => setBidMode(btn.dataset.mode));
-});
-
-// Build the 4 per-group watch picker cards (full-year mode).
-const fyWatchGroupsEl = document.getElementById('fy-watch-groups');
-function rebuildFullYearUI() {
-  const yr = +wYearSel.value;
-  // Bid year Y = the cycle that starts in DP 2 of Y and ends in DP 1 of Y+1.
-  // Two halves: Half 1 = DPs 2-7 of Y; Half 2 = DPs 8-13 of Y plus DP 1 of Y+1.
-  const groups = [
-    { startDP: 2, endDP: 7,  endYear: yr,     label: 'DPs 2-7'    },
-    { startDP: 8, endDP: 13, endYear: yr,     label: 'DPs 8-13, 1',
-      // Half 2 wraps: the last DP is DP 1 of next year.
-      wrapsToNextYear: true },
-  ];
-  fyWatchGroupsEl.innerHTML = '';
-  groups.forEach((g, groupIdx) => {
-    const startInfo = getDPInfo(g.startDP, yr);
-    const lastDP = g.wrapsToNextYear ? 1 : g.endDP;
-    const lastYear = g.wrapsToNextYear ? yr + 1 : yr;
-    const endInfo = getDPInfo(lastDP, lastYear);
-    const card = document.createElement('div');
-    card.className = 'fy-watch-group';
-    card.dataset.group = groupIdx;
-    card.innerHTML = `
-      <div class="fy-head">
-        <span class="fy-title">${g.label}</span>
-        <span class="fy-range">${fmtDate(startInfo.start)} – ${fmtDate(endInfo.end)}</span>
-      </div>
-      <div class="watch-options">
-        <div class="watch-opt" data-w="1"><div class="w-num">1</div><div class="w-label">Watch One</div><div class="w-status">— Not Selected —</div></div>
-        <div class="watch-opt" data-w="2"><div class="w-num">2</div><div class="w-label">Watch Two</div><div class="w-status">— Not Selected —</div></div>
-        <div class="watch-opt" data-w="3"><div class="w-num">3</div><div class="w-label">Watch Three</div><div class="w-status">— Not Selected —</div></div>
-      </div>`;
-    // Wire up the watch picker for this group, mirroring the single-mode picker logic.
-    card.querySelectorAll('.watch-opt').forEach(opt => {
-      opt.addEventListener('click', () => {
-        const w = +opt.dataset.w;
-        const st = watchStateGroups[groupIdx];
-        const cur = (st.c1 === w) ? '1' : (st.c2 === w) ? '2' : 'off';
-        if (cur === 'off') {
-          if (st.c1 == null) st.c1 = w; else st.c2 = w;
-        } else if (cur === '1') {
-          // 1st → 2nd: bump prior 2nd off if any, then promote to 2nd
-          if (st.c2 != null) st.c2 = null;
-          st.c1 = null;
-          st.c2 = w;
-        } else {
-          // 2nd → off
-          st.c2 = null;
-        }
-        refreshFullYearWatchCard(groupIdx);
-      });
-    });
-    fyWatchGroupsEl.appendChild(card);
-    refreshFullYearWatchCard(groupIdx);
-  });
-}
-function refreshFullYearWatchCard(groupIdx) {
-  const card = fyWatchGroupsEl.querySelector(`.fy-watch-group[data-group="${groupIdx}"]`);
-  if (!card) return;
-  const st = watchStateGroups[groupIdx];
-  card.querySelectorAll('.watch-opt').forEach(opt => {
-    const w = +opt.dataset.w;
-    opt.classList.remove('c-1', 'c-2');
-    const status = opt.querySelector('.w-status');
-    if (st.c1 === w)      { opt.classList.add('c-1'); status.textContent = '1st Choice'; }
-    else if (st.c2 === w) { opt.classList.add('c-2'); status.textContent = '2nd Choice'; }
-    else                  { status.textContent = '— Not Selected —'; }
-  });
-}
 
 /* ============================================================
    WATCH 1ST / 2ND CHOICE PICKER
@@ -2793,8 +2752,15 @@ wireOfficerSync();
 syncRDODisplay();
 
 function forgetOfficer() {
-  if (!confirm('Clear saved name, serial, classification, and watch from this device?')) return;
+  // Called by clearForget() which already pops the large confirm modal,
+  // so no native confirm() needed here — it would be a redundant
+  // second prompt after the user already said "Forget" in the modal.
   try { localStorage.removeItem(OFFICER_STORAGE_KEY); } catch (e) {}
+  // Also clear the "Don't show scheduler prompt again" preference so the
+  // dispatcher gets a fresh prompt the next time they generate a PDF
+  // without a scheduler email — mirroring the full-reset semantics
+  // implied by Forget My Info.
+  try { localStorage.removeItem(SKIP_PROMPT_KEY); } catch (e) {}
   ['w-name','w-serial','w-curwatch','w-rank'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -2839,6 +2805,10 @@ function openSchedulerEmailModal() {
 function closeSchedulerEmailModal() {
   const modal = document.getElementById('scheduler-modal');
   if (modal) modal.classList.add('hidden');
+  // If the user opened the scheduler modal via the prompt's "Add Email" path
+  // but then cancelled out without saving, drop the pending regen — they
+  // explicitly backed out. The user can retap Generate PDF when ready.
+  _regenAfterEmailSave = false;
 }
 function saveSchedulerEmail() {
   const input = document.getElementById('scheduler-email-input');
@@ -2852,9 +2822,22 @@ function saveSchedulerEmail() {
     if (email) localStorage.setItem(SCHEDULER_EMAIL_KEY, email);
     else localStorage.removeItem(SCHEDULER_EMAIL_KEY);
   } catch (e) {}
+  // Capture the pending-regen flag BEFORE closeSchedulerEmailModal() runs —
+  // that function resets the flag to false (since its other call sites are
+  // Cancel / backdrop / Escape, which mean "abandon any pending regen").
+  // If we don't snapshot here, the close call wipes the flag and the regen
+  // branch below would never fire on a successful save.
+  const wasPendingRegen = _regenAfterEmailSave;
   refreshSchedulerButtonStatus();
   closeSchedulerEmailModal();
   toast(email ? 'Scheduler email saved' : 'Scheduler email cleared');
+  // If the user opened this modal via the prompt's "Add Email" path AND
+  // they actually saved a valid email, auto-rerun PDF generation so they
+  // don't have to tap Generate PDF a second time. If they saved empty,
+  // skip — they'd just see the prompt again, defeating the point.
+  if (wasPendingRegen && email) {
+    setTimeout(() => generateCombinedPDF(), 100);
+  }
 }
 function clearSchedulerEmail() {
   try { localStorage.removeItem(SCHEDULER_EMAIL_KEY); } catch (e) {}
@@ -2873,6 +2856,74 @@ function refreshSchedulerButtonStatus() {
       ? `Scheduler: ${email} — click to edit`
       : 'No scheduler email set — click to add';
   });
+}
+
+// ============================================================
+// SCHEDULER PROMPT MODAL — pops up when the user taps Generate PDF on
+// mobile with NO scheduler email saved. Three branches:
+//   • Cancel (or backdrop/Escape) → nothing happens; PDF discarded.
+//   • Just Download → saves the already-built PDF; no email handoff.
+//   • Add Email → opens the scheduler modal; on successful save, the
+//     PDF gen reruns automatically so the user doesn't have to retap
+//     Generate PDF.
+// A "Don't show again" checkbox lets the user opt out of seeing this
+// modal in the future — both Just Download and Add Email respect it.
+// The skip preference is cleared by Forget My Info so the prompt
+// returns after a full reset.
+// ============================================================
+const SKIP_PROMPT_KEY = 'lawa-dispatch-bid-skip-scheduler-prompt-v1';
+let _promptCtx = null;            // {doc, filename} held for the Just Download branch
+let _regenAfterEmailSave = false; // set true when user picks "Add Email", cleared after save/cancel
+function getSkipSchedulerPrompt() {
+  try { return localStorage.getItem(SKIP_PROMPT_KEY) === '1'; }
+  catch (e) { return false; }
+}
+function setSkipSchedulerPrompt(val) {
+  try {
+    if (val) localStorage.setItem(SKIP_PROMPT_KEY, '1');
+    else localStorage.removeItem(SKIP_PROMPT_KEY);
+  } catch (e) {}
+}
+function showSchedulerPromptModal(ctx) {
+  _promptCtx = ctx;
+  const cb = document.getElementById('prompt-dont-show-again');
+  if (cb) cb.checked = false;
+  document.getElementById('scheduler-prompt-modal').classList.remove('hidden');
+}
+function closeSchedulerPromptModal() {
+  document.getElementById('scheduler-prompt-modal').classList.add('hidden');
+  _promptCtx = null;
+}
+function _maybeRememberSkipChoice() {
+  const cb = document.getElementById('prompt-dont-show-again');
+  if (cb && cb.checked) setSkipSchedulerPrompt(true);
+}
+function onPromptJustDownload() {
+  _maybeRememberSkipChoice();
+  if (_promptCtx) {
+    _promptCtx.doc.save(_promptCtx.filename);
+    toast('PDF downloaded');
+  }
+  closeSchedulerPromptModal();
+}
+function onPromptAddEmail() {
+  _maybeRememberSkipChoice();
+  _regenAfterEmailSave = true;
+  document.getElementById('scheduler-prompt-modal').classList.add('hidden');
+  _promptCtx = null;
+  openSchedulerEmailModal();
+}
+
+// ============================================================
+// ABOUT MODAL — opened by the lowercase "about" link at the bottom of
+// the page. Pure informational, dismissed with a single Close button
+// or Escape. No state, no side effects.
+// ============================================================
+function openAboutModal() {
+  document.getElementById('about-modal').classList.remove('hidden');
+}
+function closeAboutModal() {
+  document.getElementById('about-modal').classList.add('hidden');
 }
 
 // ============================================================
@@ -2980,15 +3031,26 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('touchcancel',_onClearTouchEnd,   { passive: true });
     btn.addEventListener('touchmove',  _onClearTouchMove,  { passive: true });
   });
-  // Close confirm modal on Escape (and the scheduler modal too).
+  // Close any open modal on Escape (scheduler email, confirm, scheduler prompt, about).
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      const sched = document.getElementById('scheduler-modal');
+      const sched  = document.getElementById('scheduler-modal');
       if (sched && !sched.classList.contains('hidden')) closeSchedulerEmailModal();
-      const conf  = document.getElementById('confirm-modal');
+      const conf   = document.getElementById('confirm-modal');
       if (conf && !conf.classList.contains('hidden')) closeConfirmModal(false);
+      const prompt = document.getElementById('scheduler-prompt-modal');
+      if (prompt && !prompt.classList.contains('hidden')) closeSchedulerPromptModal();
+      const about = document.getElementById('about-modal');
+      if (about && !about.classList.contains('hidden')) closeAboutModal();
     }
   });
+  // Backdrop-click closes the about modal (informational, low-stakes).
+  const aboutEl = document.getElementById('about-modal');
+  if (aboutEl) {
+    aboutEl.addEventListener('click', (e) => {
+      if (e.target === aboutEl) closeAboutModal();
+    });
+  }
 });
 const toastEl = document.getElementById('toast');
 function toast(msg, isError) {
@@ -3678,11 +3740,17 @@ async function shareOrFallbackPDF(doc, filename, recipients, subject, body) {
   const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   const scheduler = getSchedulerEmail();
 
-  // Mobile + no scheduler email → skip auto-send entirely; just download
-  // and surface a hint that the user can enable auto-send by saving an email.
+  // Mobile + no scheduler email → previously was a toast + immediate download.
+  // Now: pop a modal asking the user whether they want to add a scheduler
+  // email or just download this time. If the user has previously checked
+  // "Don't show again" in that modal, honor it and just download silently.
   if (isMobile && !scheduler) {
-    doc.save(filename);
-    toast('No scheduler email set — PDF generated only. Add one via the Scheduler button to enable auto-send.');
+    if (getSkipSchedulerPrompt()) {
+      doc.save(filename);
+      toast('PDF downloaded');
+      return;
+    }
+    showSchedulerPromptModal({ doc, filename });
     return;
   }
 
@@ -4064,6 +4132,33 @@ function fmtMDDYYYY(d) {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
 </script>
+
+<!-- ===== ABOUT LINK + ABOUT MODAL =====
+     A subtle lowercase "about" link pinned to the very bottom of the page
+     on the background area (outside the form card). Clicking it pops a
+     modal with the tool's purpose, data-handling notes, and contact info.
+     Kept deliberately understated — dispatchers shouldn't need to read it
+     to use the form, but the info is one tap away when they want it. -->
+<div class="about-link-wrap">
+  <button type="button" class="about-link" onclick="openAboutModal()">about</button>
+</div>
+
+<div class="modal-overlay hidden" id="about-modal" role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
+  <div class="modal-card confirm-card about-card">
+    <h3 id="about-modal-title">About this tool</h3>
+    <p>Built by LAAPOA for LAXPD Dispatchers to submit Watch and RDO bids.</p>
+    <p><strong>Your data</strong></p>
+    <ul class="about-list">
+      <li>Your name, serial, rank, and watch are saved locally on this device only (browser <code>localStorage</code>) so you don&rsquo;t have to retype them each time you use this tool. Clear them anytime with the <strong>CLEAR</strong> button &mdash; right-click on desktop or long-tap on mobile.</li>
+      <li>Your bid selections never leave your device until you generate the PDF and email it to its proper recipient.</li>
+      <li>There are no cookies, no personal data, no fingerprinting, no tracking.</li>
+    </ul>
+    <p>For questions, system enhancement requests, or support:<br><strong>Contact Sgt Mike Dear.</strong></p>
+    <div class="modal-actions">
+      <button class="btn primary" type="button" onclick="closeAboutModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- Cloudflare Web Analytics — shared with the LAAPOA officer bid tool. Both
      tools live under laapoa.github.io so they send beacons with the same
